@@ -1,0 +1,47 @@
+name: Something is broken
+description: A crash, a wrong plot, a mangled terminal
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If your device's output simply doesn't parse, use the other template —
+        it asks for the raw lines that make it fixable.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Paste the traceback if there was one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: |
+        The exact command helps. If it reproduces with `--demo` or with
+        `--replay` on a capture, say so — that means no hardware is needed to
+        chase it down.
+      placeholder: |
+        termscope --demo --split
+        then press 'm' twice
+    validations:
+      required: true
+
+  - type: input
+    id: env
+    attributes:
+      label: OS, terminal and Python version
+      placeholder: "Windows 11 / Windows Terminal / Python 3.12"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: termscope version
+      description: "`termscope --version`"
+    validations:
+      required: true

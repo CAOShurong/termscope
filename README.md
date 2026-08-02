@@ -14,6 +14,14 @@ open, over SSH if that is where the board is.
 $ pipx run termscope --demo
 ```
 
+<!-- Absolute URL so the image also renders on the PyPI project page, where
+     relative links do not resolve. Regenerate with docs/build_demo_gif.py. -->
+![termscope plotting a simulated balancing robot](https://raw.githubusercontent.com/TeresaCSR/termscope/main/docs/demo.gif)
+
+No hardware needed for that — `--demo` simulates a two-wheel balancing robot.
+Here is the same thing as text, which is what the tool actually writes to your
+terminal:
+
 ```
 balancing-robot.csv (replay)                                          snapshot
        ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡏⠉⠉⠉⠉⠉⠉⠉⠉⢣⠀⠀⠀⢀⠏⠉⠉⠉⠉⠉⢣⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -38,7 +46,6 @@ balancing-robot.csv (replay)                                          snapshot
 1●pitch 0.2470   2●motor -9.670   3●vbat 12.36
 ```
 
-No hardware needed for that — `--demo` simulates a two-wheel balancing robot.
 Point it at a real board when you have one:
 
 ```console

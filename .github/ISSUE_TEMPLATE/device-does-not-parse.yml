@@ -1,0 +1,68 @@
+name: My device's output doesn't parse
+description: termscope connects but plots nothing, or splits your data into the wrong channels
+title: "parse: "
+labels: ["parser", "needs raw sample"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful report you can file. There is no standard for
+        serial telemetry, so the only way termscope learns a new format is
+        from someone with the hardware in front of them.
+
+        The one thing that makes this fixable is **raw lines exactly as the
+        device sends them**.
+
+  - type: textarea
+    id: raw
+    attributes:
+      label: Raw lines from the device
+      description: |
+        A dozen or so lines, unedited. Capture them with either of these:
+
+            termscope <port> --raw
+            termscope <port> --record-raw out.log
+
+        Please do not tidy them up — the whitespace, the debug lines mixed in,
+        and the odd truncated line are all part of what has to be handled.
+      render: text
+      placeholder: |
+        boot ok
+        pitch:1.23 roll:-4.5
+        pitch:1.31 roll:-4.4
+        [WARN] imu recalibrating
+    validations:
+      required: true
+
+  - type: input
+    id: expected
+    attributes:
+      label: What should the channels be called?
+      placeholder: "pitch, roll, and the number after 'temp='"
+    validations:
+      required: true
+
+  - type: textarea
+    id: got
+    attributes:
+      label: What termscope did instead
+      placeholder: |
+        Nothing plotted, "waiting for data..." stayed on screen.
+        Or: it made ch0..ch5 out of one line that should be three channels.
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: Board and toolchain
+      placeholder: "STM32F103 / PlatformIO, or Arduino Nano / Arduino IDE"
+
+  - type: input
+    id: version
+    attributes:
+      label: termscope version
+      description: "`termscope --version`"
+      placeholder: "0.1.0"
+    validations:
+      required: true
