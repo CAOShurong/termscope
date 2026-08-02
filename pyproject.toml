@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "termscope"
+dynamic = ["version"]
+description = "A live oscilloscope for serial data, in your terminal."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Your Name", email = "you@example.com" }]
+keywords = [
+    "serial", "oscilloscope", "plot", "terminal", "tui", "embedded",
+    "arduino", "stm32", "microcontroller", "uart", "telemetry", "cli",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: System :: Hardware",
+    "Topic :: Terminals",
+]
+
+# The core has no dependencies at all: the plot, the parser and the terminal
+# layer are pure standard library. pyserial is only needed to open a real
+# port, so --demo, pipes and log replay work on a bare interpreter.
+dependencies = []
+
+[project.optional-dependencies]
+serial = ["pyserial>=3.4"]
+dev = ["pyserial>=3.4", "pytest>=7", "ruff>=0.6"]
+
+[project.scripts]
+termscope = "termscope.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/termscope"
+Issues = "https://github.com/your-username/termscope/issues"
+Changelog = "https://github.com/your-username/termscope/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/termscope/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/termscope"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::ResourceWarning"]
+
+[tool.ruff]
+line-length = 96
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    # Escape sequences and box-drawing characters are the point of this
+    # project, so the ambiguous-unicode rules would fire on every render.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

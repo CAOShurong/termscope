@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Captures written by `termscope --record` land in the working directory.
+# The one under examples/ is committed on purpose and re-added below.
+termscope-*.csv
+*.log
+!examples/*.csv
