@@ -47,5 +47,5 @@ First release.
   than falling back unnecessarily.
 - **Zero dependencies** in the core; pyserial only for opening a real port.
 
-[Unreleased]: https://github.com/your-username/termscope/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/your-username/termscope/releases/tag/v0.1.0
+[Unreleased]: https://github.com/TeresaCSR/termscope/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/TeresaCSR/termscope/releases/tag/v0.1.0
