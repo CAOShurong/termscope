@@ -2,6 +2,11 @@
 
 **A live oscilloscope for serial data, in your terminal.**
 
+[![CI](https://github.com/CAOShurong/termscope/actions/workflows/ci.yml/badge.svg)](https://github.com/CAOShurong/termscope/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/termscope.svg)](https://pypi.org/project/termscope/)
+[![Python](https://img.shields.io/pypi/pyversions/termscope.svg)](https://pypi.org/project/termscope/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Your board is printing numbers. You want to see them move. Right now that means
 opening the Arduino IDE's plotter (a GUI, Windows-shaped, one window), or
 piping to a file and loading it into Python after the fact — neither of which
