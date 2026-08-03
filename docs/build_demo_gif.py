@@ -305,9 +305,7 @@ def render_still(mode: str) -> list[str]:
             layout, window=WINDOW, x_mode="time", sample_count=layout.plot_width * 2
         )
     )
-    rows += renderer.render_legend(
-        channels, layout, sample_window=layout.plot_width * 2
-    )
+    rows += renderer.render_legend(channels, layout, sample_window=layout.plot_width * 2)
     return rows
 
 
