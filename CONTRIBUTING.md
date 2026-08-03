@@ -8,7 +8,7 @@ from people with the hardware in front of them.
 ## Getting set up
 
 ```bash
-git clone https://github.com/TeresaCSR/termscope
+git clone https://github.com/CAOShurong/termscope
 cd termscope
 python -m pip install -e ".[dev]"
 ```

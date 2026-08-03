@@ -9,7 +9,7 @@ description = "A live oscilloscope for serial data, in your terminal."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { file = "LICENSE" }
-authors = [{ name = "Shurong Cao", email = "170531907+TeresaCSR@users.noreply.github.com" }]
+authors = [{ name = "Shurong Cao", email = "170531907+CAOShurong@users.noreply.github.com" }]
 keywords = [
     "serial", "oscilloscope", "plot", "terminal", "tui", "embedded",
     "arduino", "stm32", "microcontroller", "uart", "telemetry", "cli",
@@ -45,9 +45,9 @@ dev = ["pyserial>=3.4", "pytest>=7", "ruff>=0.6"]
 termscope = "termscope.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/TeresaCSR/termscope"
-Issues = "https://github.com/TeresaCSR/termscope/issues"
-Changelog = "https://github.com/TeresaCSR/termscope/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/CAOShurong/termscope"
+Issues = "https://github.com/CAOShurong/termscope/issues"
+Changelog = "https://github.com/CAOShurong/termscope/blob/main/CHANGELOG.md"
 
 [tool.hatch.version]
 path = "src/termscope/__init__.py"

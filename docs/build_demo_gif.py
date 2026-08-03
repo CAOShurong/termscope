@@ -174,7 +174,8 @@ def collect_frames() -> list[list[str]]:
     return frames[:FRAMES]
 
 
-def draw(frames: list[list[str]], font_size: int) -> None:
+def _draw_frames(frames: list[list[str]], font_size: int, out: list) -> None:
+    """Rasterise each frame's styled rows, appending images to ``out``."""
     from PIL import Image, ImageDraw
 
     font = load_font(font_size)
@@ -200,7 +201,6 @@ def draw(frames: list[list[str]], font_size: int) -> None:
                 dy = y + row * (ch // 4)
                 d.rectangle([dx, dy, dx + dot_w - 1, dy + dot_h - 1], fill=color)
 
-    images = []
     for rows in frames:
         img = Image.new("RGB", (width, height), BACKGROUND)
         d = ImageDraw.Draw(img)
@@ -227,9 +227,17 @@ def draw(frames: list[list[str]], font_size: int) -> None:
                 if buf:
                     d.text((x, y), "".join(buf), font=font, fill=color)
                     x += cw * len(buf)
-        # Quantising per frame keeps the palette stable across the animation;
-        # letting GIF pick per frame makes the traces shimmer.
-        images.append(img.convert("P", palette=Image.ADAPTIVE, colors=128))
+        out.append(img)
+
+
+def draw(frames: list[list[str]], font_size: int) -> None:
+    from PIL import Image
+
+    raw: list = []
+    _draw_frames(frames, font_size, raw)
+    # Quantising each frame the same way keeps the palette stable across the
+    # animation; letting GIF choose per frame makes the traces shimmer.
+    images = [img.convert("P", palette=Image.ADAPTIVE, colors=128) for img in raw]
 
     images[0].save(
         OUT,
@@ -242,9 +250,83 @@ def draw(frames: list[list[str]], font_size: int) -> None:
     )
 
 
+def render_still(mode: str) -> list[str]:
+    """One fully-populated frame in a given display mode.
+
+    ``mode`` is ``split`` (small multiples) or ``ascii`` (the fallback for
+    terminals whose encoding cannot carry braille).
+    """
+    from termscope.canvas import ASCII
+
+    charset = ASCII if mode == "ascii" else BRAILLE
+    renderer = Renderer(Palette(dark=True, depth="truecolor"), charset=charset)
+    parser = StreamParser()
+    timebase = TimeBase()
+    channels = ChannelSet(capacity=4096, color_slots=MAX_SERIES)
+    layout = renderer.layout(COLS, ROWS, 3)
+
+    with FIXTURE.open(encoding="utf-8") as handle:
+        for raw in handle:
+            parsed = parser.feed(raw.rstrip("\r\n"))
+            if not parsed.values:
+                continue
+            values, stamp = timebase.apply(parsed.values, 0.0)
+            if values:
+                channels.add(values, stamp)
+
+    now = channels.latest_timestamp or 0.0
+    title = f"termscope --{'split' if mode == 'split' else 'demo'}"
+    rows = [renderer.render_header(title, f"{now:5.1f}s", COLS)]
+    if mode == "split":
+        rows += renderer.render_split_rows(
+            channels,
+            channels.visible_names(),
+            layout,
+            window=WINDOW,
+            now=now,
+            x_mode="time",
+            sample_window=layout.plot_width * 2,
+        )
+    else:
+        extent = channels.extent(layout.plot_width * 2)
+        lo, hi = renderer.pad_range(*extent) if extent else (-1.0, 1.0)
+        rows += renderer.render_plot_rows(
+            channels,
+            channels.visible_names(),
+            layout,
+            lo,
+            hi,
+            window=WINDOW,
+            now=now,
+            x_mode="time",
+        )
+    rows.append(
+        renderer.render_xaxis(
+            layout, window=WINDOW, x_mode="time", sample_count=layout.plot_width * 2
+        )
+    )
+    rows += renderer.render_legend(
+        channels, layout, sample_window=layout.plot_width * 2
+    )
+    return rows
+
+
+def draw_still(rows: list[str], path: pathlib.Path, font_size: int) -> None:
+    from PIL import Image
+
+    images: list[Image.Image] = []
+    _draw_frames([rows], font_size, images)
+    images[0].convert("RGB").save(path, optimize=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--font-size", type=int, default=13)
+    ap.add_argument(
+        "--stills",
+        action="store_true",
+        help="also write PNG stills of split mode and the ASCII fallback",
+    )
     args = ap.parse_args()
 
     frames = collect_frames()
@@ -255,6 +337,12 @@ def main() -> int:
     print(f"wrote {OUT.relative_to(ROOT)}  ({len(frames)} frames, {size_kb} KB)")
     if size_kb > 4096:
         print("warning: over 4 MB; GitHub renders it but it will be slow to load")
+
+    if args.stills:
+        for mode in ("split", "ascii"):
+            out = ROOT / "docs" / f"shot-{mode}.png"
+            draw_still(render_still(mode), out, args.font_size)
+            print(f"wrote {out.relative_to(ROOT)}  ({out.stat().st_size // 1024} KB)")
     return 0
 
 

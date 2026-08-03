@@ -16,7 +16,7 @@ $ pipx run termscope --demo
 
 <!-- Absolute URL so the image also renders on the PyPI project page, where
      relative links do not resolve. Regenerate with docs/build_demo_gif.py. -->
-![termscope plotting a simulated balancing robot](https://raw.githubusercontent.com/TeresaCSR/termscope/main/docs/demo.gif)
+![termscope plotting a simulated balancing robot](https://raw.githubusercontent.com/CAOShurong/termscope/main/docs/demo.gif)
 
 No hardware needed for that — `--demo` simulates a two-wheel balancing robot.
 Here is the same thing as text, which is what the tool actually writes to your
