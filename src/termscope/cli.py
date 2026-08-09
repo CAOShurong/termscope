@@ -42,6 +42,7 @@ input formats (detected automatically):
   pitch:1.23 roll:-4.5      key:value or key=value
   1.23, -4.5, 0.02          bare numbers  (Arduino Serial Plotter style)
   {"pitch": 1.23}           one JSON object per line
+  >temp:1000:23.5            Teleplot time series (timestamps are milliseconds)
   a CSV header line names the columns for the bare rows that follow
 """
 
@@ -280,16 +281,18 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
             parsed = parser.feed(line)
             if recorder is not None and opt.record_mode == "raw":
                 recorder.write_raw(parsed.text or line)
-            if not parsed.values:
+            if not parsed.samples:
                 continue
-            values, stamp = timebase.apply(parsed.values, time.time())
-            if opt.only:
-                values = {k: v for k, v in values.items() if k in opt.only}
-            if not values:
-                continue
-            channels.add(values, stamp)
-            if recorder is not None and opt.record_mode == "csv":
-                recorder.write_values(values, stamp)
+            now = time.time()
+            for sample in parsed.samples:
+                values, stamp = timebase.apply(sample, now)
+                if opt.only:
+                    values = {k: v for k, v in values.items() if k in opt.only}
+                if not values:
+                    continue
+                channels.add(values, stamp)
+                if recorder is not None and opt.record_mode == "csv":
+                    recorder.write_values(values, stamp)
 
     source.start()
     deadline = time.monotonic() + max(0.1, seconds)

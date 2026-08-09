@@ -14,12 +14,15 @@ the figures in the README reproducible.
 
 from __future__ import annotations
 
+from .parser import TELEPLOT_TIME_KEY
+
 __all__ = ["CANDIDATES", "TimeBase"]
 
 #: Channel names understood as a time base, mapped to seconds-per-unit.
 #: Ordered by how specific the name is: a stream with both ``time_s`` and
 #: ``millis`` means the first, and a bare ``t`` is the weakest signal.
 CANDIDATES: tuple[tuple[str, float], ...] = (
+    (TELEPLOT_TIME_KEY, 1e-3),
     ("time_s", 1.0),
     ("timestamp", 1.0),
     ("time", 1.0),
@@ -86,6 +89,12 @@ class TimeBase:
         """
         if self.auto and not self._resolved:
             self._detect(values)
+
+        # A Teleplot timestamp is protocol metadata.  ``--no-time-column`` or
+        # an explicitly selected clock may choose not to use it, but it must
+        # never leak through as a plotted data series.
+        if TELEPLOT_TIME_KEY in values and self.column != TELEPLOT_TIME_KEY:
+            values = {key: value for key, value in values.items() if key != TELEPLOT_TIME_KEY}
 
         if self.column is None or self.column not in values:
             return values, fallback

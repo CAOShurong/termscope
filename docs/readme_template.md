@@ -50,8 +50,9 @@ Python 3.9+. Linux, macOS, Windows.
 
 ## It reads what your firmware already prints
 
-There is no standard for serial telemetry, so termscope detects the format
-instead of asking you to adopt one. All four of these work with no flags:
+There is no single standard for serial telemetry, so termscope detects the
+format instead of asking you to adopt one. All five of these work with no
+flags:
 
 | Your `printf` | Channels you get |
 |---|---|
@@ -59,6 +60,7 @@ instead of asking you to adopt one. All four of these work with no flags:
 | `1.23, -4.5, 0.02` | `ch0`, `ch1`, `ch2` (Arduino Serial Plotter style) |
 | `{"pitch": 1.23}` | `pitch` |
 | `time,pitch,roll` then `0.1,1.23,-4.5` | `time`, `pitch`, `roll` (CSV header names the columns) |
+| `>temp:1000:23.5§°C` | `temp`, plotted at the protocol's 1000 ms timestamp ([Teleplot](https://github.com/nesnes/teleplot) time series) |
 
 Real streams are messier than any of those, so the parser is built for the mess:
 
@@ -70,6 +72,29 @@ Real streams are messier than any of those, so the parser is built for the mess:
   escape codes still parses.
 - **NaN and inf are dropped** rather than being allowed to collapse the y-axis.
 - **`--prefix '>'`** if you want only lines your firmware tags as data.
+
+### Teleplot time-series input
+
+Firmware that already prints Teleplot-compatible serial messages does not need
+a second output format for termscope. Single values, explicit millisecond
+timestamps, units, and timestamped batches are accepted automatically:
+
+```text
+>temperature:23.5
+>temperature:1627551892437:23.5§°C
+>temperature:1627551892437:23.5;1627551892537:23.7§°C
+```
+
+Explicit timestamps become the x-axis, so buffered batches retain their real
+spacing instead of arriving as one artificial vertical stack. Units are
+accepted but the current terminal legend keeps the protocol's stable series
+name rather than displaying unit metadata.
+
+This is deliberately the **time-series subset**, not a claim of full Teleplot
+compatibility. XY (`|xy`), text (`|t`), no-plot (`|np`), clear-history
+(`|clr`), log, and 3D messages remain visible in raw view but are not drawn as
+ordinary time-series values. Silently turning those shapes into a line chart
+would be worse than declining to plot them.
 
 ## Two ways to see several channels
 

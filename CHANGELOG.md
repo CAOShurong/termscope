@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-09
+
+### Added
+
+- Native support for Teleplot's serial time-series subset: single values,
+  explicit millisecond timestamps, units, and timestamped point batches.
+- Batched samples now travel through parsing, plotting, filtering, and CSV
+  recording without discarding all but one point.
+
+### Fixed
+
+- Timestamped Teleplot messages such as `>temp:1000:23.5` no longer plot the
+  timestamp (`1000`) as if it were the measurement (`23.5`). Unsupported XY,
+  text, no-plot, clear-history, log, and 3D messages are kept out of the time
+  series instead of being partially interpreted by the labelled-value parser.
+
 ## [0.1.1] — 2026-08-03
 
 ### Fixed
@@ -57,6 +73,7 @@ First release.
   than falling back unnecessarily.
 - **Zero dependencies** in the core; pyserial only for opening a real port.
 
-[Unreleased]: https://github.com/CAOShurong/termscope/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/CAOShurong/termscope/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/CAOShurong/termscope/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/CAOShurong/termscope/releases/tag/v0.1.1
 [0.1.0]: https://github.com/CAOShurong/termscope/releases/tag/v0.1.0
