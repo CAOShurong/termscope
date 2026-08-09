@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from termscope.parser import Format, StreamParser
+from termscope.parser import TELEPLOT_TIME_KEY, Format, StreamParser
 
 
 class TestLabelled(unittest.TestCase):
@@ -108,6 +108,56 @@ class TestJson(unittest.TestCase):
         p = StreamParser()
         p.feed('{"a": 1}')
         self.assertEqual(p.feed('{"a": ').values, {})
+
+
+class TestTeleplot(unittest.TestCase):
+    def test_single_point_and_unit(self):
+        p = StreamParser()
+        result = p.feed(">temperature:23.5§°C|g")
+        self.assertEqual(result.values, {"temperature": 23.5})
+        self.assertEqual(result.fmt, Format.TELEPLOT)
+
+    def test_explicit_millisecond_timestamp_is_not_plotted_as_the_value(self):
+        p = StreamParser()
+        result = p.feed(">temperature:1627551892437:23.5")
+        self.assertEqual(
+            result.values,
+            {TELEPLOT_TIME_KEY: 1627551892437.0, "temperature": 23.5},
+        )
+
+    def test_batched_points_are_preserved(self):
+        p = StreamParser()
+        result = p.feed(">temperature:1000:20;1250:21;1500:22§°C")
+        self.assertEqual(
+            result.samples,
+            [
+                {TELEPLOT_TIME_KEY: 1000.0, "temperature": 20.0},
+                {TELEPLOT_TIME_KEY: 1250.0, "temperature": 21.0},
+                {TELEPLOT_TIME_KEY: 1500.0, "temperature": 22.0},
+            ],
+        )
+        self.assertEqual(p.parsed_count, 3)
+        self.assertEqual(p.channels, ["temperature"])
+
+    def test_unrepresentable_message_types_are_not_misplotted(self):
+        for line in (
+            ">trajectory:12.3:45.67|xy",
+            ">state:running|t",
+            ">temperature:23.5|np",
+            ">temperature:23.5|clr",
+            ">:device rebooted",
+            ">3D|cube:S:cube:P:1:1:1",
+        ):
+            with self.subTest(line=line):
+                result = StreamParser().feed(line)
+                self.assertEqual(result.values, {})
+                self.assertEqual(result.fmt, Format.TELEPLOT)
+
+    def test_tagged_multi_channel_line_keeps_existing_labelled_semantics(self):
+        p = StreamParser(prefix=">")
+        result = p.feed(">pitch:1.5 roll:2")
+        self.assertEqual(result.values, {"pitch": 1.5, "roll": 2.0})
+        self.assertEqual(result.fmt, Format.LABELLED)
 
 
 class TestRobustness(unittest.TestCase):

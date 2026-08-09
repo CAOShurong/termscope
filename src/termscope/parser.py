@@ -30,6 +30,14 @@ class Format:
     JSON = "json"  # {"pitch": 1.23}
     CSV_HEADER = "csv-header"  # time,pitch,roll  then  10,1.2,3.4
     BARE = "bare"  # 1.23 4.56   /   1.23,4.56
+    TELEPLOT = "teleplot"  # >temp:millis:value;millis:value§unit|flags
+
+
+# Teleplot timestamps are metadata, not a visible channel.  Keeping them in
+# the sample until TimeBase sees it lets the existing clock-normalisation code
+# handle buffered points and device reboots without coupling the parser to the
+# renderer.
+TELEPLOT_TIME_KEY = "__termscope_teleplot_millis"
 
 
 # A number: optional sign, decimal or integer, optional exponent. Also accepts
@@ -72,9 +80,19 @@ class ParsedLine:
     text: str
     values: dict[str, float] = field(default_factory=dict)
     fmt: str = Format.UNKNOWN
+    samples: list[dict[str, float]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # ``values`` remains the convenient, backwards-compatible view of a
+        # normal one-sample line.  ``samples`` carries Teleplot batches through
+        # the ingest pipeline without silently dropping all but one point.
+        if self.samples and not self.values:
+            self.values = self.samples[-1]
+        elif self.values and not self.samples:
+            self.samples = [self.values]
 
     def __bool__(self) -> bool:
-        return bool(self.values)
+        return bool(self.samples)
 
 
 def _clean(line: str) -> str:
@@ -90,6 +108,76 @@ def _to_float(tok: str) -> float | None:
     if val != val or val in (float("inf"), float("-inf")):
         return None
     return val
+
+
+_TELEPLOT_UNSUPPORTED_FLAGS = {"clr", "np", "t", "xy"}
+
+
+def _parse_teleplot(line: str) -> list[dict[str, float]] | None:
+    """Parse Teleplot's serial time-series subset.
+
+    ``None`` means the line is not Teleplot and should be offered to the
+    ordinary labelled parser.  An empty list means it *is* Teleplot, but uses
+    semantics termscope cannot represent honestly (XY, text, no-plot, or
+    clear-history), so it must remain visible only in the raw pane.
+
+    Teleplot timestamps are milliseconds.  Batched time-series points require
+    one timestamp per point, matching the protocol rather than guessing a
+    sample interval that the device never supplied.
+    """
+    if not line.startswith(">"):
+        return None
+    if line.startswith(">3D|"):
+        return []
+
+    name, separator, payload = line[1:].partition(":")
+    name = name.strip()
+    if not separator:
+        return None
+    if not name:
+        # ``>:message`` is a Teleplot log line, not a numeric series.
+        return []
+    if any(char in name for char in ":|;"):
+        return None
+
+    data, flag_separator, flag_text = payload.partition("|")
+    flags = {
+        flag.strip().lower() for flag in flag_text.split(",") if flag_separator and flag.strip()
+    }
+    if flags & _TELEPLOT_UNSUPPORTED_FLAGS:
+        return []
+
+    # Units belong in presentation metadata; termscope currently keys series
+    # by their stable protocol name, so a late unit does not create a second
+    # channel for the same signal.
+    data = data.partition("§")[0].strip()
+    if not data:
+        return None
+
+    points = [point.strip() for point in data.split(";")]
+    if any(not point for point in points):
+        return None
+
+    batched = len(points) > 1
+    samples: list[dict[str, float]] = []
+    for point in points:
+        fields = [field.strip() for field in point.split(":")]
+        if len(fields) == 1 and not batched:
+            value = _to_float(fields[0])
+            if value is None:
+                return None
+            samples.append({name: value})
+            continue
+
+        if len(fields) != 2:
+            return None
+        timestamp = _to_float(fields[0])
+        value = _to_float(fields[1])
+        if timestamp is None or value is None:
+            return None
+        samples.append({TELEPLOT_TIME_KEY: timestamp, name: value})
+
+    return samples
 
 
 class StreamParser:
@@ -203,7 +291,9 @@ class StreamParser:
         if not text_body:
             return ParsedLine(text=text, fmt=self.fmt)
 
-        detected = self._detect(text_body)
+        teleplot_candidate = text if text.startswith(">") else text_body
+        teleplot_samples = _parse_teleplot(teleplot_candidate)
+        detected = Format.TELEPLOT if teleplot_samples is not None else self._detect(text_body)
 
         # A CSV header re-keys the positional channels. It can legitimately
         # appear mid-stream when a board reboots, so it is always honoured.
@@ -223,31 +313,52 @@ class StreamParser:
         # Labelled data may appear inside an otherwise chatty line, so a
         # locked-in labelled stream keeps scanning even when the line as a
         # whole does not look like pure telemetry.
-        if self.fmt == Format.LABELLED:
-            values = self._parse_labelled(text_body)
+        samples: list[dict[str, float]] = []
+        if self.fmt == Format.TELEPLOT:
+            samples = teleplot_samples if detected == Format.TELEPLOT else []
+        elif self.fmt == Format.LABELLED:
+            # A timestamped Teleplot line also contains ``name:number``.  Do
+            # not fall back to the labelled regex and plot the timestamp as if
+            # it were the measurement.
+            values = self._parse_labelled(text_body) if detected != Format.TELEPLOT else {}
+            if values:
+                samples = [values]
         elif self.fmt == Format.JSON:
             values = self._parse_json(text_body) if detected == Format.JSON else {}
+            if values:
+                samples = [values]
         elif self.fmt == Format.BARE:
             values = self._parse_bare(text_body) if detected == Format.BARE else {}
-        else:
-            values = {}
+            if values:
+                samples = [values]
 
-        if not values:
+        if not samples:
             self.skipped_count += 1
             return ParsedLine(text=text, fmt=self.fmt)
 
-        for name in values:
-            if name not in self.channels:
+        accepted: list[dict[str, float]] = []
+        for sample in samples:
+            for name in sample:
+                if name == TELEPLOT_TIME_KEY or name in self.channels:
+                    continue
                 if len(self.channels) >= self.max_channels:
                     # Silently ignore channels past the cap rather than
                     # letting a runaway stream exhaust memory.
                     continue
                 self.channels.append(name)
 
-        values = {k: v for k, v in values.items() if k in self.channels}
-        if not values:
+            filtered = {
+                key: value
+                for key, value in sample.items()
+                if key == TELEPLOT_TIME_KEY or key in self.channels
+            }
+            # A timestamp without an accepted data channel is not a sample.
+            if any(key != TELEPLOT_TIME_KEY for key in filtered):
+                accepted.append(filtered)
+
+        if not accepted:
             self.skipped_count += 1
             return ParsedLine(text=text, fmt=self.fmt)
 
-        self.parsed_count += 1
-        return ParsedLine(text=text, values=values, fmt=self.fmt)
+        self.parsed_count += len(accepted)
+        return ParsedLine(text=text, samples=accepted, fmt=self.fmt)

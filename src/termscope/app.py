@@ -210,16 +210,17 @@ class App:
                 self.recorder.write_raw(parsed.text or line)
             if self.opt.raw_view and parsed.text:
                 self.raw_lines.append(parsed.text)
-            if not parsed.values:
+            if not parsed.samples:
                 continue
-            values, stamp = self.timebase.apply(parsed.values, now)
-            if self.opt.only:
-                values = {k: v for k, v in values.items() if k in self.opt.only}
-            if not values:
-                continue
-            self.channels.add(values, stamp)
-            if self.recorder is not None and self.opt.record_mode == "csv":
-                self.recorder.write_values(values, stamp)
+            for sample in parsed.samples:
+                values, stamp = self.timebase.apply(sample, now)
+                if self.opt.only:
+                    values = {k: v for k, v in values.items() if k in self.opt.only}
+                if not values:
+                    continue
+                self.channels.add(values, stamp)
+                if self.recorder is not None and self.opt.record_mode == "csv":
+                    self.recorder.write_values(values, stamp)
         if len(self.raw_lines) > 500:
             del self.raw_lines[:-500]
         self._update_rate()

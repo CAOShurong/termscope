@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+from termscope.parser import TELEPLOT_TIME_KEY
 from termscope.timebase import TimeBase
 
 
@@ -112,6 +113,22 @@ class TestBehaviour(unittest.TestCase):
         for i in range(5):
             values, _ = tb.apply({"time_s": float(i), "a": 1.0}, fallback=0.0)
             self.assertNotIn("time_s", values)
+
+    def test_teleplot_milliseconds_are_normalised_and_removed_from_the_plot(self):
+        tb = TimeBase()
+        values, first = tb.apply({TELEPLOT_TIME_KEY: 1000.0, "temp": 20.0}, 999.0)
+        values2, second = tb.apply({TELEPLOT_TIME_KEY: 1250.0, "temp": 21.0}, 999.0)
+        self.assertEqual(values, {"temp": 20.0})
+        self.assertEqual(values2, {"temp": 21.0})
+        self.assertEqual(first, 0.0)
+        self.assertEqual(second, 0.25)
+        self.assertTrue(tb.active)
+
+    def test_no_time_column_drops_teleplot_metadata_and_uses_arrival_time(self):
+        tb = TimeBase(auto=False)
+        values, stamp = tb.apply({TELEPLOT_TIME_KEY: 1000.0, "temp": 20.0}, 999.0)
+        self.assertEqual(values, {"temp": 20.0})
+        self.assertEqual(stamp, 999.0)
 
 
 if __name__ == "__main__":
