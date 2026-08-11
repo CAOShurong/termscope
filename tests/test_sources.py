@@ -8,9 +8,12 @@ fail on a loaded CI runner.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import time
+import types
 import unittest
+from unittest.mock import patch
 
 from termscope.parser import StreamParser
 from termscope.sources import DemoSource, FileSource, Source, SourceError
@@ -135,6 +138,143 @@ class TestSerialSourceWithoutPyserial(unittest.TestCase):
         self.assertIsInstance(err, SourceError)
         self.assertIn("pyserial", str(err))
         self.assertIn("--demo", str(err))
+
+
+class _FakeSerial:
+    """Small pyserial-shaped fixture for deterministic disconnect tests."""
+
+    def __init__(self, events: list[bytes | BaseException]) -> None:
+        self._events = iter(events)
+        self.closed = False
+
+    @property
+    def in_waiting(self) -> int:
+        return 1
+
+    def read(self, _size: int) -> bytes:
+        event = next(self._events, b"")
+        if isinstance(event, BaseException):
+            raise event
+        return event
+
+    def close(self) -> None:
+        self.closed = True
+
+    def write(self, _data: bytes) -> int:
+        if self.closed:
+            raise OSError("closed")
+        return 1
+
+
+class TestSerialReconnect(unittest.TestCase):
+    def test_programmatic_interval_must_be_positive_and_finite(self):
+        from termscope.sources import SerialSource
+
+        for value in (0.0, -1.0, float("nan"), float("inf")):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                SerialSource("COM7", reconnect_interval=value)
+
+    def test_missing_pyserial_is_not_retried(self):
+        from termscope.sources import SerialSource
+
+        with patch.dict(sys.modules, {"serial": None}):
+            src = SerialSource("COM7", reconnect_interval=0.01)
+            collect(src, minimum=1, timeout=1.0)
+
+        self.assertEqual(src.reconnect_count, 0)
+        self.assertIsInstance(src.check_error(), SourceError)
+        self.assertIn("pyserial", str(src.check_error()))
+
+    def test_opt_in_reconnect_keeps_lines_across_a_disconnect(self):
+        from termscope.sources import SerialSource
+
+        first = _FakeSerial([b"pitch:1\n", OSError("device removed")])
+        second = _FakeSerial([b"pitch:2\n"])
+        connections = iter([first, second])
+        serial = types.SimpleNamespace(Serial=lambda *_args, **_kwargs: next(connections))
+
+        with patch.dict(sys.modules, {"serial": serial}):
+            src = SerialSource("COM7", reconnect_interval=0.01)
+            lines = collect(src, minimum=2)
+
+        self.assertEqual(lines, ["pitch:1", "pitch:2"])
+        self.assertTrue(first.closed)
+        self.assertEqual(src.reconnect_count, 1)
+        self.assertEqual(src.description, "COM7 @ 115200")
+        self.assertIsNone(src.check_error())
+
+    def test_partial_line_is_not_spliced_to_the_next_device_session(self):
+        from termscope.sources import SerialSource
+
+        first = _FakeSerial([b"pitch:1", OSError("device removed")])
+        second = _FakeSerial([b"pitch:2\n"])
+        connections = iter([first, second])
+        serial = types.SimpleNamespace(Serial=lambda *_args, **_kwargs: next(connections))
+
+        with patch.dict(sys.modules, {"serial": serial}):
+            lines = collect(
+                SerialSource("COM7", reconnect_interval=0.01), minimum=1, timeout=1.0
+            )
+
+        self.assertEqual(lines, ["pitch:2"])
+
+    def test_default_still_surfaces_a_disconnect_instead_of_retrying(self):
+        from termscope.sources import SerialSource
+
+        calls = 0
+
+        def open_once(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            return _FakeSerial([OSError("device removed")])
+
+        with patch.dict(sys.modules, {"serial": types.SimpleNamespace(Serial=open_once)}):
+            src = SerialSource("COM7")
+            collect(src, minimum=1, timeout=1.0)
+
+        self.assertEqual(calls, 1)
+        self.assertIsInstance(src.check_error(), SourceError)
+        self.assertIn("device removed", str(src.check_error()))
+
+    def test_stop_interrupts_waiting_between_reconnect_attempts(self):
+        from termscope.sources import SerialSource
+
+        calls = 0
+
+        def unavailable(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            raise OSError("not present")
+
+        with patch.dict(sys.modules, {"serial": types.SimpleNamespace(Serial=unavailable)}):
+            src = SerialSource("COM7", reconnect_interval=0.01)
+            src.start()
+            deadline = time.monotonic() + 1.0
+            while calls < 2 and time.monotonic() < deadline:
+                time.sleep(0.005)
+            src.stop()
+
+        self.assertGreaterEqual(calls, 2)
+        self.assertTrue(src.finished)
+        self.assertIsNone(src.check_error())
+
+    def test_invalid_serial_settings_are_not_retried(self):
+        from termscope.sources import SerialSource
+
+        calls = 0
+
+        def invalid(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            raise ValueError("unsupported baudrate")
+
+        with patch.dict(sys.modules, {"serial": types.SimpleNamespace(Serial=invalid)}):
+            src = SerialSource("COM7", reconnect_interval=0.01)
+            collect(src, minimum=1, timeout=1.0)
+
+        self.assertEqual(calls, 1)
+        self.assertIsInstance(src.check_error(), SourceError)
+        self.assertIn("invalid serial settings", str(src.check_error()))
 
 
 if __name__ == "__main__":

@@ -35,6 +35,32 @@ Point it at a real board when you have one:
 $ termscope /dev/ttyUSB0 --baud 115200
 ```
 
+### Keep the plot open through a board reset
+
+Uploading firmware, pressing reset, or briefly losing a USB cable can make the
+operating system close the serial handle. Retry the same port instead of ending
+the scope:
+
+```console
+$ termscope /dev/ttyUSB0 --baud 115200 --reconnect
+$ termscope COM7 --reconnect 0.25       # retry every 250 ms
+```
+
+The header says `reconnecting` while the port is unavailable and returns to the
+normal port label after it opens again. Existing plot history stays on screen,
+but an unterminated line from the old connection is discarded so it cannot be
+joined to the first line from the new device session.
+
+Retrying is deliberately **opt-in**. Without `--reconnect`, open and read errors
+still exit non-zero, which keeps scripts fail-fast. With it enabled, termscope
+waits until you quit and retries only the originally selected operating-system
+path; it does not scan for and silently switch to another serial device. On
+Linux, a `/dev/serial/by-id/...` path is the safest way to follow one physical
+adapter if `/dev/ttyUSB0` may be renumbered. A path is not device
+authentication, so do not enable automatic reconnect where another local user
+can replace the device behind that path. Restart termscope if a firmware upload
+also changes the telemetry format.
+
 ## Install
 
 ```console
@@ -250,6 +276,10 @@ rows = renderer.render_plot_rows(
 ```
 
 ## Contributing
+
+The evidence and trade-offs behind serial reconnection are recorded in
+[`docs/reconnect-research.md`](docs/reconnect-research.md). Security reports and
+the local-data boundary are covered by [SECURITY.md](SECURITY.md).
 
 Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 The test suite runs with no dependencies at all:
