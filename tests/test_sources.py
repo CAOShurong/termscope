@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
 import time
 import types
 import unittest
@@ -108,6 +109,10 @@ class TestFileSource(unittest.TestCase):
         lines = collect(FileSource(self.path, rate=200), minimum=3)
         self.assertEqual(len(lines), 3)
 
+    def test_replay_applies_backpressure_instead_of_losing_lines(self):
+        lines = collect(FileSource(self.path, queue_capacity=1), minimum=3)
+        self.assertEqual(lines, ["a:1", "a:2", "a:3"])
+
 
 class TestDrain(unittest.TestCase):
     def test_drain_is_bounded(self):
@@ -120,6 +125,68 @@ class TestDrain(unittest.TestCase):
 
     def test_drain_on_an_idle_source_is_empty(self):
         self.assertEqual(DemoSource().drain(), [])
+
+
+class _ManualSource(Source):
+    def __init__(self, capacity: int, overflow: str) -> None:
+        super().__init__(queue_capacity=capacity, overflow=overflow)
+
+    def _run(self) -> None:
+        return
+
+
+class TestBoundedInputQueue(unittest.TestCase):
+    def test_capacity_and_policy_are_validated(self):
+        with self.assertRaises(ValueError):
+            _ManualSource(capacity=0, overflow="block")
+        with self.assertRaises(ValueError):
+            _ManualSource(capacity=1, overflow="unknown")
+
+    def test_live_overflow_keeps_the_newest_lines_and_counts_loss(self):
+        src = _ManualSource(capacity=3, overflow="drop_oldest")
+        for i in range(5):
+            src._emit(f"sample:{i}")
+
+        self.assertEqual(src.drain(), ["sample:2", "sample:3", "sample:4"])
+        self.assertEqual(src.dropped_input_lines, 2)
+
+    def test_lossless_overflow_applies_backpressure(self):
+        src = _ManualSource(capacity=1, overflow="block")
+        src._emit("first")
+        producer = threading.Thread(target=src._emit, args=("second",))
+        producer.start()
+        time.sleep(0.05)
+
+        self.assertTrue(producer.is_alive())
+        self.assertEqual(src.drain(), ["first"])
+        producer.join(timeout=1.0)
+        self.assertFalse(producer.is_alive())
+        self.assertEqual(src.drain(), ["second"])
+        self.assertEqual(src.dropped_input_lines, 0)
+
+    def test_serial_source_uses_the_live_newest_first_policy(self):
+        from termscope.sources import SerialSource
+
+        src = SerialSource("COM7", queue_capacity=2)
+        src._emit("a:1")
+        src._emit("a:2")
+        src._emit("a:3")
+
+        self.assertEqual(src.drain(), ["a:2", "a:3"])
+        self.assertEqual(src.dropped_input_lines, 1)
+
+    def test_stop_releases_a_backpressured_producer(self):
+        src = _ManualSource(capacity=1, overflow="block")
+        src._emit("first")
+        producer = threading.Thread(target=src._emit, args=("second",))
+        producer.start()
+        time.sleep(0.05)
+
+        src.stop()
+        producer.join(timeout=1.0)
+
+        self.assertFalse(producer.is_alive())
+        self.assertEqual(src.drain(), ["first"])
 
 
 class TestSerialSourceWithoutPyserial(unittest.TestCase):

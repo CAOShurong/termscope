@@ -22,6 +22,7 @@ import time
 from abc import ABC, abstractmethod
 
 __all__ = [
+    "INPUT_QUEUE_CAPACITY",
     "DemoSource",
     "FileSource",
     "SerialSource",
@@ -30,6 +31,12 @@ __all__ = [
     "StdinSource",
     "list_ports",
 ]
+
+
+# One full render-loop drain. At 30 fps this absorbs short scheduling stalls
+# even at unusually high line rates without letting producer/consumer
+# imbalance grow forever.
+INPUT_QUEUE_CAPACITY = 4096
 
 
 class SourceError(RuntimeError):
@@ -46,11 +53,24 @@ class Source(ABC):
     #: Shown in the status bar.
     description = "source"
 
-    def __init__(self) -> None:
-        self._queue: queue.SimpleQueue[str] = queue.SimpleQueue()
+    def __init__(
+        self,
+        *,
+        queue_capacity: int = INPUT_QUEUE_CAPACITY,
+        overflow: str = "block",
+    ) -> None:
+        if queue_capacity <= 0:
+            raise ValueError("queue_capacity must be greater than zero")
+        if overflow not in ("block", "drop_oldest"):
+            raise ValueError("overflow must be 'block' or 'drop_oldest'")
+        self.queue_capacity = queue_capacity
+        self._overflow = overflow
+        self._queue: queue.Queue[str] = queue.Queue(maxsize=queue_capacity)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._error: BaseException | None = None
+        self._dropped_input_lines = 0
+        self._drop_lock = threading.Lock()
         #: Set once the producer has no more data (EOF on a file or pipe).
         self.finished = False
 
@@ -88,10 +108,37 @@ class Source(ABC):
 
     # -- plumbing ----------------------------------------------------------
 
-    def _emit(self, line: str) -> None:
-        self._queue.put(line)
+    def _emit(self, line: str) -> bool:
+        """Queue one line, applying the source's explicit overload policy.
 
-    def drain(self, limit: int = 4096) -> list[str]:
+        Finite and pipe sources use backpressure so their data stays lossless.
+        Live sources keep the newest complete lines: once a plotter is behind,
+        displaying stale minutes of history is less useful than catching up.
+        """
+        if self._overflow == "drop_oldest":
+            while not self._stop.is_set():
+                try:
+                    self._queue.put_nowait(line)
+                    return True
+                except queue.Full:
+                    try:
+                        self._queue.get_nowait()
+                    except queue.Empty:
+                        # The consumer won the race; retry the put.
+                        continue
+                    with self._drop_lock:
+                        self._dropped_input_lines += 1
+            return False
+
+        while not self._stop.is_set():
+            try:
+                self._queue.put(line, timeout=0.05)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def drain(self, limit: int = INPUT_QUEUE_CAPACITY) -> list[str]:
         """Take up to ``limit`` buffered lines without blocking.
 
         The cap matters: a firmware dumping at 500 kbaud can produce lines
@@ -108,6 +155,11 @@ class Source(ABC):
 
     def check_error(self) -> BaseException | None:
         return self._error
+
+    @property
+    def dropped_input_lines(self) -> int:
+        with self._drop_lock:
+            return self._dropped_input_lines
 
     def write(self, data: str) -> bool:
         """Send data back to the device. False if the source is read-only."""
@@ -132,8 +184,9 @@ class SerialSource(Source):
         *,
         timeout: float = 0.2,
         reconnect_interval: float | None = None,
+        queue_capacity: int = INPUT_QUEUE_CAPACITY,
     ) -> None:
-        super().__init__()
+        super().__init__(queue_capacity=queue_capacity, overflow="drop_oldest")
         if reconnect_interval is not None and (
             not math.isfinite(reconnect_interval) or reconnect_interval <= 0
         ):
@@ -268,8 +321,14 @@ class FileSource(Source):
     the whole file is loaded at once.
     """
 
-    def __init__(self, path: str, *, rate: float = 0.0) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        path: str,
+        *,
+        rate: float = 0.0,
+        queue_capacity: int = INPUT_QUEUE_CAPACITY,
+    ) -> None:
+        super().__init__(queue_capacity=queue_capacity, overflow="block")
         self.path = path
         self.rate = rate
         self.description = f"{os.path.basename(path)} (replay)"
@@ -301,8 +360,14 @@ class DemoSource(Source):
 
     description = "demo (simulated balancing robot)"
 
-    def __init__(self, *, rate: float = 60.0, seed: int | None = 7) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        *,
+        rate: float = 60.0,
+        seed: int | None = 7,
+        queue_capacity: int = INPUT_QUEUE_CAPACITY,
+    ) -> None:
+        super().__init__(queue_capacity=queue_capacity, overflow="drop_oldest")
         self.rate = max(1.0, rate)
         self._rng = random.Random(seed)
         self._pitch = 0.0

@@ -83,6 +83,22 @@ authentication, so do not enable automatic reconnect where another local user
 can replace the device behind that path. Restart termscope if a firmware upload
 also changes the telemetry format.
 
+### High-rate input stays bounded
+
+Live producers and a terminal renderer do not always run at the same speed.
+TermScope holds at most 4,096 complete input lines between them. If a serial
+device outruns the parser and renderer, the oldest queued lines are discarded
+so the display catches up to the newest live data instead of accumulating an
+unbounded delay. The header and status line show `DROP N`, and the exit summary
+reports the same count.
+
+Files and stdin use backpressure instead: their producer waits for queue space,
+so replay and ordinary pipelines do not lose lines at this boundary. Live CSV
+or raw recording cannot recover a line already dropped before parsing, so any
+non-zero `DROP` count means the recording is incomplete. A zero count covers
+only TermScope's own handoff queue; it does not prove that the board, USB/UART
+adapter, operating-system driver, or pyserial delivered every byte.
+
 ## Install
 
 ```console
@@ -339,8 +355,9 @@ rows = renderer.render_plot_rows(
 
 ## Contributing
 
-The evidence and trade-offs behind serial reconnection are recorded in
-[`docs/reconnect-research.md`](docs/reconnect-research.md). Security reports and
+The evidence and trade-offs behind serial reconnection and overload handling
+are recorded in [`docs/reconnect-research.md`](docs/reconnect-research.md) and
+[`docs/overload-research.md`](docs/overload-research.md). Security reports and
 the local-data boundary are covered by [SECURITY.md](SECURITY.md).
 
 Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).

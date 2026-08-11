@@ -63,6 +63,7 @@ include = [
     "/LICENSE",
     "/CHANGELOG.md",
     "/SECURITY.md",
+    "/docs/overload-research.md",
     "/docs/reconnect-research.md",
 ]
 
