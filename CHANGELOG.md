@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-11
+
+### Added
+
+- Opt-in serial recovery with `--reconnect [SEC]`. TermScope now keeps the
+  plot and recording session alive across a board reset, firmware upload, or
+  brief USB disconnect while retrying the same operating-system port path.
+- The live header reports `reconnecting` while the device is unavailable.
+
+### Safety
+
+- Fail-fast behavior remains the default. Missing pyserial and invalid serial
+  settings are never retried, retry waits stop promptly on exit, and a partial
+  line is not joined across two device sessions.
+- Reconnection does not scan for a substitute device or authenticate the
+  hardware behind a reused path; this boundary is documented in the README
+  and security policy.
+
 ## [0.2.0] — 2026-08-09
 
 ### Added
@@ -73,7 +91,8 @@ First release.
   than falling back unnecessarily.
 - **Zero dependencies** in the core; pyserial only for opening a real port.
 
-[Unreleased]: https://github.com/CAOShurong/termscope/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/CAOShurong/termscope/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/CAOShurong/termscope/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/CAOShurong/termscope/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/CAOShurong/termscope/releases/tag/v0.1.1
 [0.1.0]: https://github.com/CAOShurong/termscope/releases/tag/v0.1.0

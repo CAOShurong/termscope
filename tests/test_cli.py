@@ -12,12 +12,15 @@ import csv
 import io
 import os
 import re
+import sys
 import tempfile
+import types
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from typing import ClassVar
+from unittest.mock import patch
 
-from termscope.cli import build_parser, main
+from termscope.cli import build_parser, main, make_source
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -45,6 +48,20 @@ class TestArgs(unittest.TestCase):
         self.assertEqual(args.baud, 115200)
         self.assertEqual(args.window, 10.0)
         self.assertEqual(args.charset, "auto")
+        self.assertIsNone(args.reconnect)
+
+    def test_reconnect_uses_one_second_or_an_explicit_interval(self):
+        default = build_parser().parse_args(["COM7", "--reconnect"])
+        explicit = build_parser().parse_args(["COM7", "--reconnect", "0.25"])
+        self.assertEqual(default.reconnect, 1.0)
+        self.assertEqual(explicit.reconnect, 0.25)
+        self.assertEqual(make_source(explicit).reconnect_interval, 0.25)
+
+    def test_reconnect_rejects_a_non_positive_interval(self):
+        for value in ("0", "-1", "nan", "inf"):
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as ctx:
+                build_parser().parse_args(["COM7", "--reconnect", value])
+            self.assertEqual(ctx.exception.code, 2)
 
 
 class TestOnce(unittest.TestCase):
@@ -178,6 +195,24 @@ class TestFailureModes(unittest.TestCase):
         finally:
             os.unlink(path)
             os.rmdir(dir_)
+
+    def test_bounded_reconnect_reports_the_last_serial_error(self):
+        calls = 0
+
+        def unavailable(*_args, **_kwargs):
+            nonlocal calls
+            calls += 1
+            raise OSError("device is still absent")
+
+        with patch.dict(sys.modules, {"serial": types.SimpleNamespace(Serial=unavailable)}):
+            code, _, err = run(
+                ["COM7", "--reconnect", "0.01", "--once", "0.05", "--color", "none"]
+            )
+
+        self.assertEqual(code, 1)
+        self.assertGreaterEqual(calls, 2)
+        self.assertIn("last serial error", err)
+        self.assertIn("device is still absent", err)
 
 
 if __name__ == "__main__":

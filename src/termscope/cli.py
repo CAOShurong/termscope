@@ -11,6 +11,7 @@ Everything else is an escape hatch for when that guess is wrong.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 
@@ -47,6 +48,17 @@ input formats (detected automatically):
 """
 
 
+def positive_seconds(value: str) -> float:
+    """Parse a strictly positive duration for retry and timing options."""
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a number of seconds") from exc
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise argparse.ArgumentTypeError("must be a finite number greater than zero")
+    return seconds
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="termscope",
@@ -79,6 +91,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="replay speed in lines/second (default: as fast as possible)",
     )
     source.add_argument("-l", "--list", action="store_true", help="list serial ports and exit")
+    source.add_argument(
+        "--reconnect",
+        nargs="?",
+        type=positive_seconds,
+        const=1.0,
+        default=None,
+        metavar="SEC",
+        help="keep retrying the same serial port after disconnects "
+        "(default interval: 1 second)",
+    )
 
     parsing = parser.add_argument_group("parsing")
     parsing.add_argument(
@@ -203,7 +225,7 @@ def make_source(args: argparse.Namespace) -> Source:
     if args.port == "-":
         return StdinSource()
     if args.port:
-        return SerialSource(args.port, args.baud)
+        return SerialSource(args.port, args.baud, reconnect_interval=args.reconnect)
 
     if not sys.stdin.isatty():
         # Being on the receiving end of a pipe is an unambiguous signal.
@@ -217,7 +239,7 @@ def make_source(args: argparse.Namespace) -> Source:
             "  termscope --list     show detected ports\n"
             "  pip install 'termscope[serial]'   if pyserial is missing"
         )
-    return SerialSource(port, args.baud)
+    return SerialSource(port, args.baud, reconnect_interval=args.reconnect)
 
 
 def options_from_args(args: argparse.Namespace) -> Options:
@@ -313,7 +335,14 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
         print(f"termscope: {err}", file=sys.stderr)
         return 1
     if not channels.names:
-        print("termscope: no samples parsed.", file=sys.stderr)
+        last_disconnect = getattr(source, "last_disconnect", None)
+        if last_disconnect:
+            print(
+                f"termscope: no samples parsed; last serial error: {last_disconnect}",
+                file=sys.stderr,
+            )
+        else:
+            print("termscope: no samples parsed.", file=sys.stderr)
         return 1
 
     from .term import terminal_size

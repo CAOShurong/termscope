@@ -56,7 +56,15 @@ path = "src/termscope/__init__.py"
 packages = ["src/termscope"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/SECURITY.md",
+    "/docs/reconnect-research.md",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

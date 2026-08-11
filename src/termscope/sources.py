@@ -36,6 +36,10 @@ class SourceError(RuntimeError):
     """A source could not be opened or died mid-stream."""
 
 
+class _SerialConfigurationError(SourceError):
+    """A permanent serial configuration error that retrying cannot repair."""
+
+
 class Source(ABC):
     """Base class: a background thread producing text lines."""
 
@@ -121,16 +125,31 @@ class SerialSource(Source):
     all work in an environment where it was never installed.
     """
 
-    def __init__(self, port: str, baudrate: int = 115200, *, timeout: float = 0.2) -> None:
+    def __init__(
+        self,
+        port: str,
+        baudrate: int = 115200,
+        *,
+        timeout: float = 0.2,
+        reconnect_interval: float | None = None,
+    ) -> None:
         super().__init__()
+        if reconnect_interval is not None and (
+            not math.isfinite(reconnect_interval) or reconnect_interval <= 0
+        ):
+            raise ValueError("reconnect_interval must be finite and greater than zero")
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
+        self.reconnect_interval = reconnect_interval
+        self.reconnect_count = 0
+        self.last_disconnect: str | None = None
         self._serial = None
         self._write_lock = threading.Lock()
-        self.description = f"{port} @ {baudrate}"
+        self._connected_description = f"{port} @ {baudrate}"
+        self.description = self._connected_description
 
-    def _open(self):
+    def _serial_module(self):
         try:
             import serial
         except ImportError as exc:
@@ -139,13 +158,41 @@ class SerialSource(Source):
                 "  pip install 'termscope[serial]'   (or: pip install pyserial)\n"
                 "No hardware to hand? Try:  termscope --demo"
             ) from exc
+        return serial
+
+    def _open(self, serial):
         try:
             return serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+        except (TypeError, ValueError) as exc:
+            raise _SerialConfigurationError(
+                f"invalid serial settings for {self.port}: {exc}"
+            ) from exc
         except Exception as exc:  # pyserial raises several unrelated types
             raise SourceError(f"could not open {self.port}: {exc}") from exc
 
     def _run(self) -> None:
-        self._serial = self._open()
+        # Import once, outside the retry loop. Missing pyserial is a setup
+        # error; waiting forever cannot make the package appear.
+        serial = self._serial_module()
+        while not self._stop.is_set():
+            try:
+                self._serial = self._open(serial)
+                self.description = self._connected_description
+                self._read_connection()
+                return
+            except _SerialConfigurationError:
+                raise
+            except SourceError as exc:
+                self.close()
+                if self.reconnect_interval is None or self._stop.is_set():
+                    raise
+                self.reconnect_count += 1
+                self.last_disconnect = str(exc)
+                self.description = f"{self._connected_description} (reconnecting)"
+                if self._stop.wait(self.reconnect_interval):
+                    return
+
+    def _read_connection(self) -> None:
         pending = bytearray()
         while not self._stop.is_set():
             try:
@@ -157,7 +204,8 @@ class SerialSource(Source):
                 continue
             pending.extend(chunk)
             # Split on \n and tolerate \r\n; a partial trailing line stays in
-            # the buffer until its terminator arrives.
+            # the buffer until its terminator arrives. A disconnect discards
+            # an unterminated fragment so two device sessions cannot be joined.
             while True:
                 nl = pending.find(b"\n")
                 if nl < 0:
