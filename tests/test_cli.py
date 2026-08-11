@@ -20,7 +20,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from typing import ClassVar
 from unittest.mock import patch
 
-from termscope.cli import build_parser, main, make_source
+from termscope.app import Options
+from termscope.cli import build_parser, main, make_source, run_once
+from termscope.sources import DemoSource
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -112,6 +114,22 @@ class TestOnce(unittest.TestCase):
         _, out, _ = run(["--demo", "--once", "1", "--color", "none", "--charset", "braille"])
         out.encode("utf-8")
         self.assertIn("⠀", out)
+
+    def test_snapshot_reports_input_queue_drops(self):
+        source = DemoSource(rate=1, queue_capacity=1)
+        source._emit("pitch:1")
+        source._emit("pitch:2")
+        out, err = io.StringIO(), io.StringIO()
+
+        with redirect_stdout(out), redirect_stderr(err):
+            code = run_once(
+                source,
+                Options(charset="ascii", color_depth="none"),
+                0.1,
+            )
+
+        self.assertEqual((code, err.getvalue()), (0, ""))
+        self.assertIn("DROP", out.getvalue())
 
 
 class TestReplayRoundTrip(unittest.TestCase):

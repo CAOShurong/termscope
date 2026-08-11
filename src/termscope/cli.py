@@ -356,7 +356,10 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
         else time.time()
     )
 
-    rows = [renderer.render_header(source.description, "snapshot", width)]
+    snapshot_status = "snapshot"
+    if source.dropped_input_lines:
+        snapshot_status += f"  DROP {source.dropped_input_lines}"
+    rows = [renderer.render_header(source.description, snapshot_status, width)]
     if opt.split:
         rows.extend(
             renderer.render_split_rows(

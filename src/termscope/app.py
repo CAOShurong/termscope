@@ -165,6 +165,7 @@ class App:
 
     def _print_summary(self) -> None:
         total = sum(self.channels[n].total for n in self.channels)
+        input_drops = self.source.dropped_input_lines
         if not total:
             print("termscope: no samples were parsed.")
             if self.parser.skipped_count:
@@ -174,6 +175,8 @@ class App:
                     "  Try --prefix to select telemetry lines, or --raw to see the "
                     "stream verbatim."
                 )
+            if input_drops:
+                print(f"  {input_drops} input lines were dropped under overload.")
             return
         elapsed = time.monotonic() - self.started
         print(
@@ -181,6 +184,11 @@ class App:
         )
         if self.recorder is not None:
             print(f"  wrote {self.recorder.rows_written} rows to {self.opt.record_path}")
+        if input_drops:
+            print(
+                f"  {input_drops} input lines were dropped under overload; "
+                "newest live data was kept."
+            )
 
     def _check_source_error(self) -> bool:
         exc = self.source.check_error()
@@ -516,11 +524,20 @@ class App:
             bits.append(f"{self.sample_rate:.0f}/s")
         if self.recorder is not None:
             bits.append(f"REC {self.recorder.rows_written}")
+        input_drops = self.source.dropped_input_lines
+        if input_drops:
+            bits.append(f"DROP {input_drops}")
         return "  ".join(bits)
 
     def _status_text(self) -> str:
         if time.monotonic() < self.status_until and self.status_message:
             return f" {self.status_message} "
+        input_drops = self.source.dropped_input_lines
+        if input_drops:
+            return (
+                f"  {input_drops} input line(s) dropped under overload; "
+                "newest live data kept   ? help"
+            )
         overflow = self.channels.overflow_names
         if overflow:
             return (

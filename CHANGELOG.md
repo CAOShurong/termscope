@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-11
+
+### Added
+
+- Observable overload reporting. The live header, status line, snapshot, and
+  exit summary now show how many complete input lines TermScope dropped.
+
+### Changed
+
+- Replaced the unbounded producer/consumer queue with a 4,096-line handoff.
+  Live serial and demo sources discard the oldest queued line under sustained
+  overload so the plot catches up to current data; file replay and stdin use
+  backpressure and remain lossless at this boundary.
+- Documented that `DROP 0` measures only TermScope's own queue and cannot prove
+  that firmware, USB/UART hardware, drivers, or pyserial delivered every byte.
+
 ## [0.3.0] — 2026-08-11
 
 ### Added
@@ -91,7 +107,8 @@ First release.
   than falling back unnecessarily.
 - **Zero dependencies** in the core; pyserial only for opening a real port.
 
-[Unreleased]: https://github.com/CAOShurong/termscope/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/CAOShurong/termscope/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/CAOShurong/termscope/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/CAOShurong/termscope/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/CAOShurong/termscope/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/CAOShurong/termscope/releases/tag/v0.1.1

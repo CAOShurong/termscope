@@ -24,7 +24,14 @@ credentials, private device identifiers, or personal data.
 - Serial, stdin, pipe, and replay input are untrusted text. TermScope does not
   execute input as code, and the parser strips terminal control bytes before
   display. Resource limits cap tracked channels, buffered samples, per-frame
-  drain work, and unterminated serial fragments.
+  drain work, unterminated serial fragments, and the producer-to-consumer
+  handoff at 4,096 complete lines. This is a line-count bound, not a byte quota;
+  one unusually long input line can still consume substantial memory.
+- Live serial and demo sources keep the newest lines when that handoff is full
+  and report the exact `DROP` count. Replay and stdin apply backpressure instead
+  of dropping there. `DROP 0` does not prove end-to-end completeness: bytes can
+  already have been lost in firmware, a USB/UART adapter, an operating-system
+  driver, or pyserial before TermScope receives a complete line.
 - `--reconnect` retries only the operating-system path selected at startup. It
   does not discover a replacement device. The path itself is not an identity
   check: a different local device can later receive the same `COM` or `/dev`
