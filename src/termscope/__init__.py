@@ -17,7 +17,7 @@ The public API is small enough to embed in another tool: build a
 
 from __future__ import annotations
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = [
     "Canvas",
     "ChannelBuffer",

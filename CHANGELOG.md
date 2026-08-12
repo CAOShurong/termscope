@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-12
+
+### Fixed
+
+- Labelled telemetry detection now requires a token boundary, so the `T08:27`
+  fragment inside an ISO timestamp such as `2026-08-11T08:27:28Z` is ignored
+  instead of creating a fictitious `T08` channel in timestamped logs.
+- Long diagnostic prefixes no longer trigger quadratic labelled-token scans;
+  replaying a 70 KB line followed by valid telemetry now completes promptly.
+
 ## [0.4.0] — 2026-08-11
 
 ### Added

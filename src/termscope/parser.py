@@ -47,7 +47,9 @@ _NUMBER = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
 # key:value or key=value. Keys are the identifier-ish things firmware uses;
 # we allow dots and brackets so "imu.gyro[0]" survives intact.
 _LABELLED_RE = re.compile(
-    r"(?P<key>[A-Za-z_][A-Za-z0-9_.\[\]/-]*)\s*[:=]\s*(?P<val>" + _NUMBER + r")"
+    r"(?<![A-Za-z0-9_.\[\]/-])(?P<key>[A-Za-z_][A-Za-z0-9_.\[\]/-]*)\s*[:=]\s*(?P<val>"
+    + _NUMBER
+    + r")"
 )
 
 _BARE_NUMBER_RE = re.compile(_NUMBER)

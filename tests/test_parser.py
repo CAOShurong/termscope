@@ -35,6 +35,32 @@ class TestLabelled(unittest.TestCase):
         p = StreamParser()
         self.assertEqual(p.feed("imu.gyro[0]:0.5").values, {"imu.gyro[0]": 0.5})
 
+    def test_slash_and_hyphen_inside_keys_survive(self):
+        p = StreamParser()
+        self.assertEqual(
+            p.feed("sensor/path:1 temp-offset:2").values,
+            {"sensor/path": 1.0, "temp-offset": 2.0},
+        )
+
+    def test_iso_timestamp_fragment_is_not_a_labelled_reading(self):
+        p = StreamParser()
+
+        diagnostic = p.feed("2026-08-11T08:27:28Z boot ok")
+        telemetry = p.feed("pitch:1.23 roll:-4.5")
+
+        self.assertEqual(diagnostic.values, {})
+        self.assertEqual(diagnostic.fmt, Format.UNKNOWN)
+        self.assertEqual(telemetry.values, {"pitch": 1.23, "roll": -4.5})
+        self.assertEqual(telemetry.fmt, Format.LABELLED)
+
+    def test_long_diagnostic_prefix_does_not_stall_labelled_detection(self):
+        p = StreamParser()
+
+        parsed = p.feed("A-" * 35_000 + "A pitch:1.25 roll:-2.5")
+
+        self.assertEqual(parsed.values, {"pitch": 1.25, "roll": -2.5})
+        self.assertEqual(parsed.fmt, Format.LABELLED)
+
     def test_telemetry_embedded_in_a_log_line(self):
         # Once locked to labelled, readings are still found inside prose --
         # firmware routinely prints "[INFO] battery=11.8V ok".
