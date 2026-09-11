@@ -9,10 +9,23 @@ from __future__ import annotations
 
 import unittest
 
-from termscope.buffers import ChannelBuffer, ChannelSet
+from termscope.buffers import ChannelBuffer, ChannelSet, moving_average
 
 
 class TestChannelBuffer(unittest.TestCase):
+    def test_moving_average_is_causal(self):
+        self.assertEqual(moving_average([0.0, 10.0, 10.0], 2), [0.0, 5.0, 10.0])
+        self.assertEqual(moving_average([1.0, 2.0, 3.0], 1), [1.0, 2.0, 3.0])
+
+    def test_smooth_window_filters_values_not_timestamps(self):
+        b = ChannelBuffer(8, smooth=2)
+        for i, value in enumerate([0.0, 10.0, 10.0]):
+            b.append(value, float(i))
+        self.assertEqual(b.values(), [0.0, 5.0, 10.0])
+        ts, vals = b.window()
+        self.assertEqual(ts, [0.0, 1.0, 2.0])
+        self.assertEqual(vals, [0.0, 5.0, 10.0])
+
     def test_append_and_read_back(self):
         b = ChannelBuffer(4)
         for i in range(3):

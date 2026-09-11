@@ -46,6 +46,7 @@ class TestArgs(unittest.TestCase):
             "--ylim",
             "--stats",
             "--trigger",
+            "--smooth",
         ):
             self.assertIn(fragment, text)
 
@@ -142,6 +143,11 @@ class TestOnce(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("min", out)
         self.assertIn("mean", out)
+
+    def test_smooth_snapshot_still_renders(self):
+        code, out, _ = run([*self.BASE, "--smooth", "4"])
+        self.assertEqual(code, 0)
+        self.assertIn("pitch", out)
 
     def test_ylim_pins_the_y_axis_in_a_snapshot(self):
         code, out, _ = run([*self.BASE, "--ylim", "-1", "100"])

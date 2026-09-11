@@ -15,7 +15,25 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-__all__ = ["ChannelBuffer", "ChannelSet", "Stats"]
+__all__ = ["ChannelBuffer", "ChannelSet", "Stats", "moving_average"]
+
+
+def moving_average(values: list[float], window: int) -> list[float]:
+    """Causal mean of the last ``window`` samples. ``window<=1`` is a no-op."""
+    if window <= 1 or len(values) <= 1:
+        return list(values)
+    width = min(int(window), len(values))
+    out: list[float] = []
+    acc = 0.0
+    for i, value in enumerate(values):
+        acc += value
+        if i >= width:
+            acc -= values[i - width]
+            n = width
+        else:
+            n = i + 1
+        out.append(acc / n)
+    return out
 
 
 @dataclass(frozen=True)
@@ -40,14 +58,23 @@ class ChannelBuffer:
         "capacity",
         "color_index",
         "name",
+        "smooth",
         "total",
         "visible",
     )
 
-    def __init__(self, capacity: int = 4096, *, name: str = "", color_index: int = -1) -> None:
+    def __init__(
+        self,
+        capacity: int = 4096,
+        *,
+        name: str = "",
+        color_index: int = -1,
+        smooth: int = 1,
+    ) -> None:
         if capacity <= 0:
             raise ValueError("capacity must be positive")
         self.capacity = capacity
+        self.smooth = max(1, int(smooth))
         self._ts = [0.0] * capacity
         self._val = [0.0] * capacity
         self._start = 0
@@ -89,7 +116,8 @@ class ChannelBuffer:
         """The most recent ``count`` values, oldest first."""
         n = self._len if count is None else min(count, self._len)
         first = self._len - n
-        return [self._val[self._index(first + i)] for i in range(n)]
+        raw = [self._val[self._index(first + i)] for i in range(n)]
+        return moving_average(raw, self.smooth)
 
     def timestamps(self, count: int | None = None) -> list[float]:
         """The most recent ``count`` timestamps, oldest first."""
@@ -106,7 +134,7 @@ class ChannelBuffer:
             idx = self._index(first + i)
             ts.append(self._ts[idx])
             val.append(self._val[idx])
-        return ts, val
+        return ts, moving_average(val, self.smooth)
 
     def last(self) -> float | None:
         if not self._len:
@@ -141,10 +169,12 @@ class ChannelSet:
         capacity: int = 4096,
         max_channels: int = 32,
         color_slots: int = 8,
+        smooth: int = 1,
     ) -> None:
         self.capacity = capacity
         self.max_channels = max_channels
         self.color_slots = color_slots
+        self.smooth = max(1, int(smooth))
         self._buffers: dict[str, ChannelBuffer] = {}
         #: Timestamp of the most recent sample, across all channels. This is
         #: the right-hand edge of the plot when replaying a capture with
@@ -186,10 +216,10 @@ class ChannelSet:
             return None
         slot = len(self._buffers)
         if slot >= self.color_slots:
-            buf = ChannelBuffer(self.capacity, name=name, color_index=-1)
+            buf = ChannelBuffer(self.capacity, name=name, color_index=-1, smooth=self.smooth)
             buf.visible = False
         else:
-            buf = ChannelBuffer(self.capacity, name=name, color_index=slot)
+            buf = ChannelBuffer(self.capacity, name=name, color_index=slot, smooth=self.smooth)
         self._buffers[name] = buf
         return buf
 

@@ -35,6 +35,7 @@ Point it at a real board when you have one:
 $ termscope /dev/ttyUSB0 --baud 115200
 $ termscope /dev/ttyUSB0 --ylim -30 30
 $ termscope /dev/ttyUSB0 --trigger pitch:5
+$ termscope /dev/ttyUSB0 --smooth 8
 ```
 
 `--ylim` pins the y-axis so a settling PID error does not autoscale into a
@@ -44,6 +45,9 @@ min / max / mean beside each channel in the legend.
 `--trigger pitch:5` (or `pitch>5` / `pitch<0`) freezes the trace on the sample
 that crosses the threshold, the way a bench scope holds an overshoot. Space
 resumes and rearms. `--trigger-edge falling` applies to the `NAME:VALUE` form.
+
+`--smooth 8` is a causal moving average over 8 samples. Recordings stay raw;
+the plot and legend stats are what get quieter.
 
 ### Keep the plot open through a board reset
 

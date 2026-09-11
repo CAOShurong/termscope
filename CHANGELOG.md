@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `--smooth N` plots a causal moving average of N samples. Raw samples stay in
+  the ring (and in CSV recordings); only the trace, legend stats, and autoscale
+  see the filter. `--smooth 1` is off. Useful for a noisy IMU while turning a
+  PID knob.
 - `--trigger SPEC` freezes the plot when a channel crosses a threshold
   (`pitch:5`, `pitch>5`, `pitch<0`). `--trigger-edge` selects rising, falling,
   or either for the `NAME:VALUE` form. Space rearms after a capture. `--once`

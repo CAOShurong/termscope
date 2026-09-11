@@ -90,6 +90,7 @@ class Options:
     ylim: tuple[float, float] | None = None
     stats: bool = False
     trigger: TriggerSpec | None = None
+    smooth: int = 1
 
 
 class App:
@@ -105,6 +106,7 @@ class App:
             capacity=self.opt.capacity,
             max_channels=self.opt.max_channels,
             color_slots=MAX_SERIES,
+            smooth=self.opt.smooth,
         )
         self.timebase = TimeBase(self.opt.time_column, auto=self.opt.auto_time_column)
         self.recorder: Recorder | None = None

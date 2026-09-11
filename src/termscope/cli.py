@@ -39,6 +39,7 @@ examples:
   termscope COM3 --ylim -30 30    pin the y-axis while you turn a PID knob
   termscope --demo --stats        legend shows min / max / mean
   termscope COM3 --trigger pitch:5   freeze when pitch crosses 5
+  termscope COM3 --smooth 8       moving average for a noisy IMU
   pio device monitor | termscope -  plot whatever another tool prints
   termscope --replay capture.csv  replay a recording
   termscope --demo --record run.csv   plot and log at the same time
@@ -189,6 +190,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="show min/max/mean next to each legend value",
     )
+    display.add_argument(
+        "--smooth",
+        type=int,
+        default=1,
+        metavar="N",
+        help="plot a causal moving average of N samples (default: 1, off)",
+    )
     display.add_argument("--no-grid", action="store_true", help="hide gridlines")
     display.add_argument(
         "--light", action="store_true", help="colours stepped for a light-background terminal"
@@ -308,6 +316,7 @@ def options_from_args(args: argparse.Namespace) -> Options:
             if args.trigger
             else None
         ),
+        smooth=max(1, args.smooth),
     )
 
 
@@ -330,7 +339,10 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
     renderer = Renderer(palette, charset=resolve_charset(opt.charset))
     parser = StreamParser(prefix=opt.prefix, max_channels=opt.max_channels)
     channels = ChannelSet(
-        capacity=opt.capacity, max_channels=opt.max_channels, color_slots=MAX_SERIES
+        capacity=opt.capacity,
+        max_channels=opt.max_channels,
+        color_slots=MAX_SERIES,
+        smooth=opt.smooth,
     )
 
     recorder = None
