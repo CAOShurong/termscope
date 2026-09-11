@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 
-from termscope.buffers import ChannelBuffer, ChannelSet, moving_average
+from termscope.buffers import ChannelBuffer, ChannelSet, ac_couple, moving_average
 
 
 class TestChannelBuffer(unittest.TestCase):
@@ -76,6 +76,32 @@ class TestChannelBuffer(unittest.TestCase):
         self.assertEqual(b.values(), [])
         self.assertIsNone(b.last())
         self.assertIsNone(b.stats())
+
+    def test_ac_couple_subtracts_the_window_mean(self):
+        coupled = ac_couple([10.0, 12.0, 11.0])
+        self.assertAlmostEqual(sum(coupled), 0.0)
+        self.assertAlmostEqual(coupled[1], 1.0)
+
+    def test_ac_centres_the_trace_but_stats_last_stays_dc(self):
+        b = ChannelBuffer(8, ac=True)
+        for i, value in enumerate([10.0, 12.0, 11.0]):
+            b.append(value, float(i))
+        vals = b.values()
+        self.assertAlmostEqual(sum(vals), 0.0)
+        st = b.stats()
+        self.assertAlmostEqual(st.last, 11.0)
+        self.assertAlmostEqual(st.mean, 0.0)
+        self.assertAlmostEqual(st.minimum, -1.0)
+        self.assertAlmostEqual(st.maximum, 1.0)
+
+    def test_set_ac_toggles_existing_and_new_channels(self):
+        cs = ChannelSet()
+        cs.add({"vbat": 12.0}, 0.0)
+        cs.add({"vbat": 12.2}, 1.0)
+        cs.set_ac(True)
+        self.assertTrue(cs["vbat"].ac)
+        cs.add({"i": 0.4}, 2.0)
+        self.assertTrue(cs["i"].ac)
 
     def test_stats(self):
         b = ChannelBuffer(8)

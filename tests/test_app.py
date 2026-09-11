@@ -25,6 +25,18 @@ class TestInputOverloadReporting(unittest.TestCase):
         self.assertFalse(app.autoscale)
         self.assertEqual(app.held_range, (-30.0, 30.0))
 
+    def test_d_toggles_ac_coupling_and_header(self):
+        app = App(DemoSource(), Options(charset="ascii", color_depth="none"))
+        self.assertFalse(app.opt.ac)
+        self.assertNotIn("AC", app._header_right())
+        app._dispatch("d")
+        self.assertTrue(app.opt.ac)
+        self.assertTrue(app.channels.ac)
+        self.assertIn("AC", app._header_right())
+        app._dispatch("d")
+        self.assertFalse(app.opt.ac)
+        self.assertNotIn("AC", app._header_right())
+
     def test_header_and_status_show_the_drop_count(self):
         self.assertIn("DROP 1", self.app._header_right())
         self.assertIn("1 input line(s) dropped", self.app._status_text())

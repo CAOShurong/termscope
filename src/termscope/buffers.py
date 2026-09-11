@@ -15,7 +15,19 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-__all__ = ["ChannelBuffer", "ChannelSet", "Stats", "moving_average"]
+__all__ = ["ChannelBuffer", "ChannelSet", "Stats", "ac_couple", "moving_average"]
+
+
+def ac_couple(values: list[float]) -> list[float]:
+    """Subtract the window mean so a DC rail's ripple is visible.
+
+    Same idea as a scope's AC coupling: the plotted trace is centred on zero,
+    recordings stay raw. A single sample has no ripple to show.
+    """
+    if len(values) <= 1:
+        return list(values)
+    mean = math.fsum(values) / len(values)
+    return [value - mean for value in values]
 
 
 def moving_average(values: list[float], window: int) -> list[float]:
@@ -55,6 +67,7 @@ class ChannelBuffer:
         "_start",
         "_ts",
         "_val",
+        "ac",
         "capacity",
         "color_index",
         "name",
@@ -70,11 +83,13 @@ class ChannelBuffer:
         name: str = "",
         color_index: int = -1,
         smooth: int = 1,
+        ac: bool = False,
     ) -> None:
         if capacity <= 0:
             raise ValueError("capacity must be positive")
         self.capacity = capacity
         self.smooth = max(1, int(smooth))
+        self.ac = bool(ac)
         self._ts = [0.0] * capacity
         self._val = [0.0] * capacity
         self._start = 0
@@ -117,7 +132,7 @@ class ChannelBuffer:
         n = self._len if count is None else min(count, self._len)
         first = self._len - n
         raw = [self._val[self._index(first + i)] for i in range(n)]
-        return moving_average(raw, self.smooth)
+        return self._present(raw)
 
     def timestamps(self, count: int | None = None) -> list[float]:
         """The most recent ``count`` timestamps, oldest first."""
@@ -134,25 +149,38 @@ class ChannelBuffer:
             idx = self._index(first + i)
             ts.append(self._ts[idx])
             val.append(self._val[idx])
-        return ts, moving_average(val, self.smooth)
+        return ts, self._present(val)
 
     def last(self) -> float | None:
         if not self._len:
             return None
         return self._val[self._index(self._len - 1)]
 
+    def _present(self, raw: list[float]) -> list[float]:
+        smoothed = moving_average(raw, self.smooth)
+        return ac_couple(smoothed) if self.ac else smoothed
+
     def stats(self, count: int | None = None) -> Stats | None:
-        """Min/max/mean over the most recent ``count`` samples."""
-        vals = self.values(count)
-        if not vals:
+        """Min/max/mean of the *plotted* window; ``last`` is the DC reading.
+
+        AC coupling centres the trace on zero, but the legend should still
+        say the rail is 12.4 V. ``last`` is therefore the smoothed value
+        before the mean is subtracted.
+        """
+        n = self._len if count is None else min(count, self._len)
+        if n <= 0:
             return None
-        total = math.fsum(vals)
+        first = self._len - n
+        raw = [self._val[self._index(first + i)] for i in range(n)]
+        smoothed = moving_average(raw, self.smooth)
+        plotted = ac_couple(smoothed) if self.ac else smoothed
+        total = math.fsum(plotted)
         return Stats(
-            count=len(vals),
-            minimum=min(vals),
-            maximum=max(vals),
-            last=vals[-1],
-            mean=total / len(vals),
+            count=len(plotted),
+            minimum=min(plotted),
+            maximum=max(plotted),
+            last=smoothed[-1],
+            mean=total / len(plotted),
         )
 
 
@@ -170,11 +198,13 @@ class ChannelSet:
         max_channels: int = 32,
         color_slots: int = 8,
         smooth: int = 1,
+        ac: bool = False,
     ) -> None:
         self.capacity = capacity
         self.max_channels = max_channels
         self.color_slots = color_slots
         self.smooth = max(1, int(smooth))
+        self.ac = bool(ac)
         self._buffers: dict[str, ChannelBuffer] = {}
         #: Timestamp of the most recent sample, across all channels. This is
         #: the right-hand edge of the plot when replaying a capture with
@@ -216,10 +246,14 @@ class ChannelSet:
             return None
         slot = len(self._buffers)
         if slot >= self.color_slots:
-            buf = ChannelBuffer(self.capacity, name=name, color_index=-1, smooth=self.smooth)
+            buf = ChannelBuffer(
+                self.capacity, name=name, color_index=-1, smooth=self.smooth, ac=self.ac
+            )
             buf.visible = False
         else:
-            buf = ChannelBuffer(self.capacity, name=name, color_index=slot, smooth=self.smooth)
+            buf = ChannelBuffer(
+                self.capacity, name=name, color_index=slot, smooth=self.smooth, ac=self.ac
+            )
         self._buffers[name] = buf
         return buf
 
@@ -238,6 +272,12 @@ class ChannelSet:
                 appended = True
         if appended and (self.latest_timestamp is None or timestamp > self.latest_timestamp):
             self.latest_timestamp = timestamp
+
+    def set_ac(self, on: bool) -> None:
+        """Toggle AC coupling on every channel, including ones created later."""
+        self.ac = bool(on)
+        for buf in self._buffers.values():
+            buf.ac = self.ac
 
     def clear(self) -> None:
         for buf in self._buffers.values():

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `--ac` (key `d`) AC-couples the plot: the window mean is subtracted so
+  ripple on a 12 V rail is visible instead of autoscaling to the DC offset.
+  The legend still shows the DC reading. Recordings stay raw.
 - `--smooth N` plots a causal moving average of N samples. Raw samples stay in
   the ring (and in CSV recordings); only the trace, legend stats, and autoscale
   see the filter. `--smooth 1` is off. Useful for a noisy IMU while turning a

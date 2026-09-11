@@ -58,6 +58,7 @@ HELP_LINES = [
     "  up/down  pan y   (when autoscale is off)",
     "  g        gridlines            v    raw text view",
     "  s        min/max/mean in legend",
+    "  d        AC / DC coupling",
     "  r        start / stop recording",
     "  c        clear buffers        q    quit",
     "",
@@ -91,6 +92,7 @@ class Options:
     stats: bool = False
     trigger: TriggerSpec | None = None
     smooth: int = 1
+    ac: bool = False
 
 
 class App:
@@ -107,6 +109,7 @@ class App:
             max_channels=self.opt.max_channels,
             color_slots=MAX_SERIES,
             smooth=self.opt.smooth,
+            ac=self.opt.ac,
         )
         self.timebase = TimeBase(self.opt.time_column, auto=self.opt.auto_time_column)
         self.recorder: Recorder | None = None
@@ -297,6 +300,10 @@ class App:
         elif key == "s":
             self.opt.stats = not self.opt.stats
             self._flash("legend stats on" if self.opt.stats else "legend stats off")
+        elif key == "d":
+            self.opt.ac = not self.opt.ac
+            self.channels.set_ac(self.opt.ac)
+            self._flash("AC coupling" if self.opt.ac else "DC coupling")
         elif key == "m":
             self.opt.split = not self.opt.split
             self._flash("split axes" if self.opt.split else "shared axis")
@@ -555,6 +562,8 @@ class App:
                 bits.append(f"HELD (+{self.dropped_while_paused} dropped)")
         else:
             bits.append(f"{self.sample_rate:.0f}/s")
+        if self.opt.ac:
+            bits.append("AC")
         if self.recorder is not None:
             bits.append(f"REC {self.recorder.rows_written}")
         input_drops = self.source.dropped_input_lines

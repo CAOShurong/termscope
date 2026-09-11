@@ -58,6 +58,7 @@ $ termscope /dev/ttyUSB0 --baud 115200
 $ termscope /dev/ttyUSB0 --ylim -30 30
 $ termscope /dev/ttyUSB0 --trigger pitch:5
 $ termscope /dev/ttyUSB0 --smooth 8
+$ termscope /dev/ttyUSB0 --ac
 ```
 
 `--ylim` pins the y-axis so a settling PID error does not autoscale into a
@@ -70,6 +71,11 @@ resumes and rearms. `--trigger-edge falling` applies to the `NAME:VALUE` form.
 
 `--smooth 8` is a causal moving average over 8 samples. Recordings stay raw;
 the plot and legend stats are what get quieter.
+
+`--ac` (or `d` while running) is a scope's AC coupling: the window mean comes
+off the trace so you can see millivolt ripple on `vbat` without the 12 V DC
+offset owning the y-axis. The legend still shows the DC value. Recordings stay
+raw.
 
 ### Keep the plot open through a board reset
 

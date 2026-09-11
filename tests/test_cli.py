@@ -47,6 +47,7 @@ class TestArgs(unittest.TestCase):
             "--stats",
             "--trigger",
             "--smooth",
+            "--ac",
         ):
             self.assertIn(fragment, text)
 
@@ -143,6 +144,11 @@ class TestOnce(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("min", out)
         self.assertIn("mean", out)
+
+    def test_ac_snapshot_labels_the_header(self):
+        code, out, _ = run([*self.BASE, "--ac"])
+        self.assertEqual(code, 0)
+        self.assertIn("AC", out)
 
     def test_smooth_snapshot_still_renders(self):
         code, out, _ = run([*self.BASE, "--smooth", "4"])

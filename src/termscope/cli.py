@@ -40,6 +40,7 @@ examples:
   termscope --demo --stats        legend shows min / max / mean
   termscope COM3 --trigger pitch:5   freeze when pitch crosses 5
   termscope COM3 --smooth 8       moving average for a noisy IMU
+  termscope COM3 --ac             AC-couple: see ripple on a DC rail
   pio device monitor | termscope -  plot whatever another tool prints
   termscope --replay capture.csv  replay a recording
   termscope --demo --record run.csv   plot and log at the same time
@@ -197,6 +198,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="plot a causal moving average of N samples (default: 1, off)",
     )
+    display.add_argument(
+        "--ac",
+        action="store_true",
+        help="AC-couple the plot: subtract the window mean so ripple on a "
+        "DC rail is visible (recordings stay raw)",
+    )
     display.add_argument("--no-grid", action="store_true", help="hide gridlines")
     display.add_argument(
         "--light", action="store_true", help="colours stepped for a light-background terminal"
@@ -317,6 +324,7 @@ def options_from_args(args: argparse.Namespace) -> Options:
             else None
         ),
         smooth=max(1, args.smooth),
+        ac=bool(args.ac),
     )
 
 
@@ -343,6 +351,7 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
         max_channels=opt.max_channels,
         color_slots=MAX_SERIES,
         smooth=opt.smooth,
+        ac=opt.ac,
     )
 
     recorder = None
@@ -425,6 +434,8 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
     snapshot_status = "snapshot"
     if triggered and watch is not None:
         snapshot_status = f"TRIG {watch.spec.describe()}"
+    if opt.ac:
+        snapshot_status += "  AC"
     if source.dropped_input_lines:
         snapshot_status += f"  DROP {source.dropped_input_lines}"
     rows = [renderer.render_header(source.description, snapshot_status, width)]
