@@ -369,6 +369,7 @@ class Renderer:
         now: float,
         x_mode: str,
         sample_window: int | None = None,
+        ylim: tuple[float, float] | None = None,
     ) -> list[str]:
         """Small multiples: one stacked panel per channel, each on its own axis.
 
@@ -393,7 +394,9 @@ class Renderer:
                 continue
             buf = channels[name]
             stats = buf.stats(sample_window)
-            if stats is None:
+            if ylim is not None:
+                lo, hi = ylim
+            elif stats is None:
                 lo, hi = -1.0, 1.0
             else:
                 lo, hi = self.pad_range(stats.minimum, stats.maximum)

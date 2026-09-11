@@ -20,6 +20,11 @@ class TestInputOverloadReporting(unittest.TestCase):
             Options(charset="ascii", color_depth="none"),
         )
 
+    def test_ylim_starts_with_autoscale_off(self):
+        app = App(DemoSource(), Options(ylim=(-30.0, 30.0)))
+        self.assertFalse(app.autoscale)
+        self.assertEqual(app.held_range, (-30.0, 30.0))
+
     def test_header_and_status_show_the_drop_count(self):
         self.assertIn("DROP 1", self.app._header_right())
         self.assertIn("1 input line(s) dropped", self.app._status_text())

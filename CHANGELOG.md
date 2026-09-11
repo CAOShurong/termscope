@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `--ylim LO HI` pins the y-axis instead of autoscaling, so a settling PID
+  error keeps a stable scale. Interactive sessions still toggle autoscale
+  with `a`; split mode honours the same pinned range.
+
 ## [0.4.1] — 2026-08-12
 
 ### Fixed

@@ -37,7 +37,14 @@ def run(argv: list[str]) -> tuple[int, str, str]:
 class TestArgs(unittest.TestCase):
     def test_help_mentions_the_input_formats(self):
         text = build_parser().format_help()
-        for fragment in ("pitch:1.23", ">temp:1000:23.5", "--demo", "--split", "--record"):
+        for fragment in (
+            "pitch:1.23",
+            ">temp:1000:23.5",
+            "--demo",
+            "--split",
+            "--record",
+            "--ylim",
+        ):
             self.assertIn(fragment, text)
 
     def test_version_exits_zero(self):
@@ -51,6 +58,17 @@ class TestArgs(unittest.TestCase):
         self.assertEqual(args.window, 10.0)
         self.assertEqual(args.charset, "auto")
         self.assertIsNone(args.reconnect)
+        self.assertIsNone(args.ylim)
+
+    def test_ylim_parses_a_pinned_range(self):
+        args = build_parser().parse_args(["--ylim", "-30", "30"])
+        self.assertEqual(args.ylim, (-30.0, 30.0))
+
+    def test_ylim_rejects_an_inverted_or_non_finite_range(self):
+        for pair in (("10", "0"), ("1", "1"), ("0", "nan"), ("-inf", "1")):
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as ctx:
+                build_parser().parse_args(["--ylim", *pair])
+            self.assertEqual(ctx.exception.code, 2)
 
     def test_reconnect_uses_one_second_or_an_explicit_interval(self):
         default = build_parser().parse_args(["COM7", "--reconnect"])
@@ -114,6 +132,12 @@ class TestOnce(unittest.TestCase):
         _, out, _ = run(["--demo", "--once", "1", "--color", "none", "--charset", "braille"])
         out.encode("utf-8")
         self.assertIn("⠀", out)
+
+    def test_ylim_pins_the_y_axis_in_a_snapshot(self):
+        code, out, _ = run([*self.BASE, "--ylim", "-1", "100"])
+        self.assertEqual(code, 0)
+        self.assertIn("100", out)
+        self.assertNotIn("100", run(self.BASE)[1])
 
     def test_snapshot_reports_input_queue_drops(self):
         source = DemoSource(rate=1, queue_capacity=1)

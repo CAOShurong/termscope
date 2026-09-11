@@ -35,6 +35,7 @@ examples:
   termscope                       open the auto-detected board at 115200
   termscope COM3 --baud 9600      a specific port and rate
   termscope --demo                a simulated robot; no hardware needed
+  termscope COM3 --ylim -30 30    pin the y-axis while you turn a PID knob
   pio device monitor | termscope -  plot whatever another tool prints
   termscope --replay capture.csv  replay a recording
   termscope --demo --record run.csv   plot and log at the same time
@@ -57,6 +58,16 @@ def positive_seconds(value: str) -> float:
     if not math.isfinite(seconds) or seconds <= 0:
         raise argparse.ArgumentTypeError("must be a finite number greater than zero")
     return seconds
+
+
+class YLimAction(argparse.Action):
+    """``--ylim LO HI`` with a finite, strictly increasing pair."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        lo, hi = values
+        if not (math.isfinite(lo) and math.isfinite(hi)) or lo >= hi:
+            parser.error(f"{option_string} LO must be a finite number strictly less than HI")
+        setattr(namespace, self.dest, (float(lo), float(hi)))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -149,6 +160,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     display.add_argument(
         "--split", action="store_true", help="one panel per channel, each independently scaled"
+    )
+    display.add_argument(
+        "--ylim",
+        nargs=2,
+        type=float,
+        metavar=("LO", "HI"),
+        action=YLimAction,
+        default=None,
+        help="pin the y-axis to LO HI instead of autoscaling",
     )
     display.add_argument("--no-grid", action="store_true", help="hide gridlines")
     display.add_argument(
@@ -262,6 +282,7 @@ def options_from_args(args: argparse.Namespace) -> Options:
         time_column=args.time_column,
         auto_time_column=not args.no_time_column,
         only=list(args.only),
+        ylim=args.ylim,
     )
 
 
@@ -370,11 +391,15 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
                 now=now,
                 x_mode=opt.x_mode,
                 sample_window=layout.plot_width * 2,
+                ylim=opt.ylim,
             )
         )
     else:
-        extent = channels.extent(layout.plot_width * 2)
-        lo, hi = renderer.pad_range(*extent) if extent else (-1.0, 1.0)
+        if opt.ylim is not None:
+            lo, hi = opt.ylim
+        else:
+            extent = channels.extent(layout.plot_width * 2)
+            lo, hi = renderer.pad_range(*extent) if extent else (-1.0, 1.0)
         rows.extend(
             renderer.render_plot_rows(
                 channels,

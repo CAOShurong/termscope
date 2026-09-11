@@ -84,6 +84,7 @@ class Options:
     time_column: str | None = None
     auto_time_column: bool = True
     only: list[str] = field(default_factory=list)
+    ylim: tuple[float, float] | None = None
 
 
 class App:
@@ -105,9 +106,9 @@ class App:
 
         self.running = True
         self.paused = False
-        self.autoscale = True
+        self.autoscale = self.opt.ylim is None
         self.show_help = False
-        self.held_range: tuple[float, float] | None = None
+        self.held_range: tuple[float, float] | None = self.opt.ylim
         self.dropped_while_paused = 0
         self.status_message = ""
         self.status_until = 0.0
@@ -422,6 +423,7 @@ class App:
                     now=now,
                     x_mode=self.opt.x_mode,
                     sample_window=self._sample_window(layout),
+                    ylim=None if self.autoscale else self.held_range,
                 )
             )
         else:

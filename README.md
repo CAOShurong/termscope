@@ -55,7 +55,11 @@ Point it at a real board when you have one:
 
 ```console
 $ termscope /dev/ttyUSB0 --baud 115200
+$ termscope /dev/ttyUSB0 --ylim -30 30
 ```
+
+`--ylim` pins the y-axis so a settling PID error does not autoscale into a
+new range every frame. Press `a` to autoscale again.
 
 ### Keep the plot open through a board reset
 
