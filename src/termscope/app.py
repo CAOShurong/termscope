@@ -24,6 +24,7 @@ from .recorder import Recorder, RecorderError
 from .sources import Source
 from .term import ESC, Terminal, ensure_utf8
 from .timebase import TimeBase
+from .trigger import TriggerSpec, TriggerWatch
 
 __all__ = ["App", "Options", "resolve_charset"]
 
@@ -49,6 +50,7 @@ HELP_LINES = [
     "termscope - keys",
     "",
     "  space    hold / resume        a    autoscale on / off",
+    "           (also rearms a --trigger after it fires)",
     "  1-8      toggle one channel   0    show every channel",
     "  m        shared / split axes  t    x-axis: time / samples",
     "  [  ]     shorter / longer window",
@@ -87,6 +89,7 @@ class Options:
     only: list[str] = field(default_factory=list)
     ylim: tuple[float, float] | None = None
     stats: bool = False
+    trigger: TriggerSpec | None = None
 
 
 class App:
@@ -105,6 +108,7 @@ class App:
         )
         self.timebase = TimeBase(self.opt.time_column, auto=self.opt.auto_time_column)
         self.recorder: Recorder | None = None
+        self._watch = TriggerWatch(self.opt.trigger) if self.opt.trigger else None
 
         self.running = True
         self.paused = False
@@ -232,6 +236,12 @@ class App:
                 self.channels.add(values, stamp)
                 if self.recorder is not None and self.opt.record_mode == "csv":
                     self.recorder.write_values(values, stamp)
+                if self._watch is not None and self._watch.observe(values):
+                    self.paused = True
+                    self.dropped_while_paused = 0
+                    self._flash(f"triggered {self._watch.spec.describe()}")
+                    self._update_rate()
+                    return
         if len(self.raw_lines) > 500:
             del self.raw_lines[:-500]
         self._update_rate()
@@ -268,7 +278,13 @@ class App:
             self.paused = not self.paused
             if self.paused:
                 self.dropped_while_paused = 0
-            self._flash("held" if self.paused else "running")
+                self._flash("held")
+            else:
+                if self._watch is not None and self._watch.fired:
+                    self._watch.rearm()
+                    self._flash("rearmed")
+                else:
+                    self._flash("running")
         elif key == "a":
             self.autoscale = not self.autoscale
             if not self.autoscale:
@@ -531,7 +547,10 @@ class App:
     def _header_right(self) -> str:
         bits = []
         if self.paused:
-            bits.append(f"HELD (+{self.dropped_while_paused} dropped)")
+            if self._watch is not None and self._watch.fired:
+                bits.append(f"TRIG {self._watch.spec.describe()}")
+            else:
+                bits.append(f"HELD (+{self.dropped_while_paused} dropped)")
         else:
             bits.append(f"{self.sample_rate:.0f}/s")
         if self.recorder is not None:

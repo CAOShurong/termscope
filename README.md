@@ -56,11 +56,16 @@ Point it at a real board when you have one:
 ```console
 $ termscope /dev/ttyUSB0 --baud 115200
 $ termscope /dev/ttyUSB0 --ylim -30 30
+$ termscope /dev/ttyUSB0 --trigger pitch:5
 ```
 
 `--ylim` pins the y-axis so a settling PID error does not autoscale into a
 new range every frame. Press `a` to autoscale again. `--stats` (or `s`) adds
 min / max / mean beside each channel in the legend.
+
+`--trigger pitch:5` (or `pitch>5` / `pitch<0`) freezes the trace on the sample
+that crosses the threshold, the way a bench scope holds an overshoot. Space
+resumes and rearms. `--trigger-edge falling` applies to the `NAME:VALUE` form.
 
 ### Keep the plot open through a board reset
 

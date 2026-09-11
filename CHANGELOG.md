@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `--trigger SPEC` freezes the plot when a channel crosses a threshold
+  (`pitch:5`, `pitch>5`, `pitch<0`). `--trigger-edge` selects rising, falling,
+  or either for the `NAME:VALUE` form. Space rearms after a capture. `--once`
+  snapshots label the header `TRIG` when the crossing happened during the
+  collection window.
 - `--ylim LO HI` pins the y-axis instead of autoscaling, so a settling PID
   error keeps a stable scale. Interactive sessions still toggle autoscale
   with `a`; split mode honours the same pinned range.

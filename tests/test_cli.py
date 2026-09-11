@@ -45,6 +45,7 @@ class TestArgs(unittest.TestCase):
             "--record",
             "--ylim",
             "--stats",
+            "--trigger",
         ):
             self.assertIn(fragment, text)
 
@@ -60,6 +61,8 @@ class TestArgs(unittest.TestCase):
         self.assertEqual(args.charset, "auto")
         self.assertIsNone(args.reconnect)
         self.assertIsNone(args.ylim)
+        self.assertIsNone(args.trigger)
+        self.assertEqual(args.trigger_edge, "rising")
 
     def test_ylim_parses_a_pinned_range(self):
         args = build_parser().parse_args(["--ylim", "-30", "30"])
@@ -145,6 +148,34 @@ class TestOnce(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("100", out)
         self.assertNotIn("100", run(self.BASE)[1])
+
+    def test_trigger_freezes_a_snapshot_on_a_crossing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cross.csv")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("pitch:0\npitch:1\npitch:6\n")
+            code, out, _ = run(
+                [
+                    "--replay",
+                    path,
+                    "--once",
+                    "1",
+                    "--color",
+                    "none",
+                    "--charset",
+                    "ascii",
+                    "--trigger",
+                    "pitch:5",
+                ]
+            )
+        self.assertEqual(code, 0)
+        self.assertIn("TRIG", out)
+        self.assertIn("pitch>5", out)
+
+    def test_bad_trigger_exits_two(self):
+        code, _, err = run(["--demo", "--once", "0.2", "--trigger", "pitch:nope"])
+        self.assertEqual(code, 2)
+        self.assertIn("trigger", err.lower())
 
     def test_snapshot_reports_input_queue_drops(self):
         source = DemoSource(rate=1, queue_capacity=1)

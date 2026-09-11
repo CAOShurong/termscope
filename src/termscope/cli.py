@@ -29,6 +29,7 @@ from .sources import (
     autodetect_port,
     list_ports,
 )
+from .trigger import parse_trigger
 
 EPILOG = """\
 examples:
@@ -37,6 +38,7 @@ examples:
   termscope --demo                a simulated robot; no hardware needed
   termscope COM3 --ylim -30 30    pin the y-axis while you turn a PID knob
   termscope --demo --stats        legend shows min / max / mean
+  termscope COM3 --trigger pitch:5   freeze when pitch crosses 5
   pio device monitor | termscope -  plot whatever another tool prints
   termscope --replay capture.csv  replay a recording
   termscope --demo --record run.csv   plot and log at the same time
@@ -143,6 +145,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-time-column",
         action="store_true",
         help="ignore any timestamp in the stream and use arrival time",
+    )
+    parsing.add_argument(
+        "--trigger",
+        metavar="SPEC",
+        help="freeze when a channel crosses a threshold (pitch:5, pitch>5, or pitch<0)",
+    )
+    parsing.add_argument(
+        "--trigger-edge",
+        choices=("rising", "falling", "either"),
+        default="rising",
+        help="edge used by NAME:VALUE triggers (default: rising)",
     )
 
     display = parser.add_argument_group("display")
@@ -290,6 +303,11 @@ def options_from_args(args: argparse.Namespace) -> Options:
         only=list(args.only),
         ylim=args.ylim,
         stats=args.stats,
+        trigger=(
+            parse_trigger(args.trigger, default_edge=args.trigger_edge)
+            if args.trigger
+            else None
+        ),
     )
 
 
@@ -306,6 +324,7 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
     from .parser import StreamParser
     from .recorder import Recorder, RecorderError
     from .timebase import TimeBase
+    from .trigger import TriggerWatch
 
     palette = Palette(dark=not opt.light, depth=opt.color_depth)
     renderer = Renderer(palette, charset=resolve_charset(opt.charset))
@@ -325,8 +344,11 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
             return 2
 
     timebase = TimeBase(opt.time_column, auto=opt.auto_time_column)
+    watch = TriggerWatch(opt.trigger) if opt.trigger else None
+    triggered = False
 
     def consume() -> None:
+        nonlocal triggered
         for line in source.drain():
             parsed = parser.feed(line)
             if recorder is not None and opt.record_mode == "raw":
@@ -343,16 +365,20 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
                 channels.add(values, stamp)
                 if recorder is not None and opt.record_mode == "csv":
                     recorder.write_values(values, stamp)
+                if watch is not None and watch.observe(values):
+                    triggered = True
+                    return
 
     source.start()
     deadline = time.monotonic() + max(0.1, seconds)
     try:
-        while time.monotonic() < deadline:
+        while time.monotonic() < deadline and not triggered:
             consume()
             if source.finished and not channels.names:
                 break
             time.sleep(0.01)
-        consume()
+        if not triggered:
+            consume()
     finally:
         source.stop()
         if recorder is not None:
@@ -385,6 +411,8 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
     )
 
     snapshot_status = "snapshot"
+    if triggered and watch is not None:
+        snapshot_status = f"TRIG {watch.spec.describe()}"
     if source.dropped_input_lines:
         snapshot_status += f"  DROP {source.dropped_input_lines}"
     rows = [renderer.render_header(source.description, snapshot_status, width)]
@@ -452,7 +480,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"termscope: {exc}", file=sys.stderr)
         return 2
 
-    opt = options_from_args(args)
+    try:
+        opt = options_from_args(args)
+    except ValueError as exc:
+        print(f"termscope: {exc}", file=sys.stderr)
+        return 2
 
     if args.once is not None:
         return run_once(source, opt, args.once)
