@@ -176,6 +176,16 @@ class TestRendering(unittest.TestCase):
         for name in ("a", "b", "c"):
             self.assertIn(name, joined)
 
+    def test_legend_stats_include_min_max_mean(self):
+        cs = make_channels(["pitch"])
+        layout = self.renderer.layout(120, 24, 1)
+        plain = " ".join(self.renderer.render_legend(cs, layout, show_stats=True))
+        self.assertIn("min", plain)
+        self.assertIn("max", plain)
+        self.assertIn("mean", plain)
+        compact = " ".join(self.renderer.render_legend(cs, layout))
+        self.assertNotIn(" mean ", f" {compact} ")
+
     def test_legend_names_every_channel_with_its_value(self):
         # This is the accessibility relief the palette depends on: several
         # hues sit below 3:1 on a light surface, which is only permitted

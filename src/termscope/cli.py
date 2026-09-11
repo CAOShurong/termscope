@@ -36,6 +36,7 @@ examples:
   termscope COM3 --baud 9600      a specific port and rate
   termscope --demo                a simulated robot; no hardware needed
   termscope COM3 --ylim -30 30    pin the y-axis while you turn a PID knob
+  termscope --demo --stats        legend shows min / max / mean
   pio device monitor | termscope -  plot whatever another tool prints
   termscope --replay capture.csv  replay a recording
   termscope --demo --record run.csv   plot and log at the same time
@@ -170,6 +171,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="pin the y-axis to LO HI instead of autoscaling",
     )
+    display.add_argument(
+        "--stats",
+        action="store_true",
+        help="show min/max/mean next to each legend value",
+    )
     display.add_argument("--no-grid", action="store_true", help="hide gridlines")
     display.add_argument(
         "--light", action="store_true", help="colours stepped for a light-background terminal"
@@ -283,6 +289,7 @@ def options_from_args(args: argparse.Namespace) -> Options:
         auto_time_column=not args.no_time_column,
         only=list(args.only),
         ylim=args.ylim,
+        stats=args.stats,
     )
 
 
@@ -421,7 +428,14 @@ def run_once(source: Source, opt: Options, seconds: float) -> int:
             sample_count=layout.plot_width * 2,
         )
     )
-    rows.extend(renderer.render_legend(channels, layout, sample_window=layout.plot_width * 2))
+    rows.extend(
+        renderer.render_legend(
+            channels,
+            layout,
+            sample_window=layout.plot_width * 2,
+            show_stats=opt.stats,
+        )
+    )
     print("\n".join(rows))
     return 0
 

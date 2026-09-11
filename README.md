@@ -59,7 +59,8 @@ $ termscope /dev/ttyUSB0 --ylim -30 30
 ```
 
 `--ylim` pins the y-axis so a settling PID error does not autoscale into a
-new range every frame. Press `a` to autoscale again.
+new range every frame. Press `a` to autoscale again. `--stats` (or `s`) adds
+min / max / mean beside each channel in the legend.
 
 ### Keep the plot open through a board reset
 
@@ -211,9 +212,10 @@ invents correlations that are not in the data.
 | `1`–`8` | toggle one channel | `0` | show every channel |
 | `m` | shared / split axes | `t` | x-axis: time / samples |
 | `[` `]` | shorter / longer window | `+` `-` | zoom y (autoscale off) |
-| `g` | gridlines | `v` | raw text view |
-| `r` | start / stop recording | `c` | clear buffers |
-| `?` | help | `q` | quit |
+| `g` | gridlines | `s` | min/max/mean in legend |
+| `v` | raw text view | `r` | start / stop recording |
+| `c` | clear buffers | `?` | help |
+| `q` | quit | | |
 
 ## Recording and replay
 

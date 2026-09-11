@@ -516,7 +516,12 @@ class Renderer:
         return f"{pal.axis()}{band}{pal.reset()}"
 
     def render_legend(
-        self, channels: ChannelSet, layout: Layout, *, sample_window: int | None = None
+        self,
+        channels: ChannelSet,
+        layout: Layout,
+        *,
+        sample_window: int | None = None,
+        show_stats: bool = False,
     ) -> list[str]:
         """One entry per channel: colour swatch, name, current value.
 
@@ -530,11 +535,18 @@ class Renderer:
         plain: list[str] = []
         for index, name in enumerate(channels.names):
             buf = channels[name]
-            stats = buf.stats(sample_window)
-            value = format_value(stats.last, width=8) if stats else "--"
+            summary = buf.stats(sample_window)
+            value = format_value(summary.last, width=8) if summary else "--"
+            extra = ""
+            if show_stats and summary is not None:
+                extra = (
+                    f" min {format_value(summary.minimum, width=7)}"
+                    f" max {format_value(summary.maximum, width=7)}"
+                    f" mean {format_value(summary.mean, width=7)}"
+                )
             key = str(index + 1) if index < 9 else " "
             marker = self.marker_on if buf.visible else self.marker_off
-            text = f"{key}{marker}{name} {value}"
+            text = f"{key}{marker}{name} {value}{extra}"
             plain.append(text)
             if not pal.enabled:
                 entries.append(text)

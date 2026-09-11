@@ -44,6 +44,7 @@ class TestArgs(unittest.TestCase):
             "--split",
             "--record",
             "--ylim",
+            "--stats",
         ):
             self.assertIn(fragment, text)
 
@@ -132,6 +133,12 @@ class TestOnce(unittest.TestCase):
         _, out, _ = run(["--demo", "--once", "1", "--color", "none", "--charset", "braille"])
         out.encode("utf-8")
         self.assertIn("⠀", out)
+
+    def test_once_stats_lists_min_max_mean(self):
+        code, out, _ = run([*self.BASE, "--stats"])
+        self.assertEqual(code, 0)
+        self.assertIn("min", out)
+        self.assertIn("mean", out)
 
     def test_ylim_pins_the_y_axis_in_a_snapshot(self):
         code, out, _ = run([*self.BASE, "--ylim", "-1", "100"])

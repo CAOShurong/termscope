@@ -55,6 +55,7 @@ HELP_LINES = [
     "  +  -     zoom y  (when autoscale is off)",
     "  up/down  pan y   (when autoscale is off)",
     "  g        gridlines            v    raw text view",
+    "  s        min/max/mean in legend",
     "  r        start / stop recording",
     "  c        clear buffers        q    quit",
     "",
@@ -85,6 +86,7 @@ class Options:
     auto_time_column: bool = True
     only: list[str] = field(default_factory=list)
     ylim: tuple[float, float] | None = None
+    stats: bool = False
 
 
 class App:
@@ -274,6 +276,9 @@ class App:
             self._flash(f"autoscale {'on' if self.autoscale else 'off'}")
         elif key == "g":
             self.opt.grid = not self.opt.grid
+        elif key == "s":
+            self.opt.stats = not self.opt.stats
+            self._flash("legend stats on" if self.opt.stats else "legend stats off")
         elif key == "m":
             self.opt.split = not self.opt.split
             self._flash("split axes" if self.opt.split else "shared axis")
@@ -457,7 +462,10 @@ class App:
         )
         rows.extend(
             self.renderer.render_legend(
-                self.channels, layout, sample_window=self._sample_window(layout)
+                self.channels,
+                layout,
+                sample_window=self._sample_window(layout),
+                show_stats=self.opt.stats,
             )
         )
         rows.append(
@@ -508,7 +516,9 @@ class App:
             rows.append(line[: layout.width])
         while len(rows) < body_height + 1:
             rows.append("")
-        rows.extend(self.renderer.render_legend(self.channels, layout))
+        rows.extend(
+            self.renderer.render_legend(self.channels, layout, show_stats=self.opt.stats)
+        )
         rows.append(self.renderer.render_status(self._status_text(), layout.width))
         return rows
 
